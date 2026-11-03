@@ -189,7 +189,7 @@ async function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <main className="p-4 md:p-6 lg:p-8 max-w-full">
+    <main className="p-3 md:p-4 lg:p-5 max-w-full">
       <Suspense fallback={<p className="text-center">Loading...</p>}>
         <DashboardContent />
       </Suspense>
