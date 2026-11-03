@@ -79,11 +79,9 @@ export default function ChartDashboard() {
         const rowYear = d.getFullYear()
         if(rowYear !== year) return
 
-        // 统计 service type
         const s = row.service_type || 'Unknown'
         serviceMap[s] = (serviceMap[s] || 0) + 1
 
-        // 从日期自动拿月份，不再依赖 row.month 字段
         const mIndex = d.getMonth()
         const mName = MONTH_SHORT[mIndex]
         monthMap[mName] += 1
@@ -147,7 +145,7 @@ export default function ChartDashboard() {
                     <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -158,8 +156,8 @@ export default function ChartDashboard() {
               <BarChart data={monthBarData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
+                <YAxis allowDecimals={false} />
+                <Tooltip formatter={(val) => [`${val} job(s)`]} />
                 <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
