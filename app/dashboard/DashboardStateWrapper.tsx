@@ -404,6 +404,17 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         >
           Customer Schedule Report
         </a>
+        {/* ===== 新增 Boss 专属 Data Validation Checker ===== */}
+        {isBoss && (
+          <a
+            href="/data-checker"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colors shadow-sm text-center"
+          >
+            Data Validation Checker
+          </a>
+        )}
+
         <button
           onClick={() => setSideOpen(false)}
           className="mt-auto text-slate-500 underline text-sm"
