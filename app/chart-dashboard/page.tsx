@@ -20,7 +20,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// 和你 Dashboard badge 颜色统一
 const SERVICE_COLOR_MAP: Record<string, string> = {
   GWM: '#0ea5e9',
   KPM: '#8b5cf6',
@@ -29,6 +28,8 @@ const SERVICE_COLOR_MAP: Record<string, string> = {
   Unknown: '#6b7280'
 }
 const DEFAULT_COLOR = '#6b7280'
+
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 type ServicePieItem = {
   name: string
@@ -42,7 +43,6 @@ type MonthBarItem = {
 
 type ChartRow = {
   service_type: string | null
-  month: string | null
   bill_date: string | null
 }
 
@@ -58,19 +58,14 @@ export default function ChartDashboard() {
       setLoading(true)
       const { data, error } = await supabase
         .from('maintenance_bills')
-        .select('service_type, month, bill_date')
+        .select('service_type, bill_date')
 
       if (error) {
-        console.error(error)
+        console.error('supabase error:', error)
         setLoading(false)
         return
       }
-
-      const filtered = data.filter((item: ChartRow) => {
-        if (!item.bill_date) return false
-        const y = new Date(item.bill_date).getFullYear()
-        return y === year
-      })
+      console.log('raw bills data:', data)
 
       const serviceMap: Record<string, number> = {}
       const monthMap: Record<string, number> = {
@@ -78,19 +73,27 @@ export default function ChartDashboard() {
         Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0,
       }
 
-      filtered.forEach((row) => {
+      data.forEach((row: ChartRow) => {
+        if (!row.bill_date) return
+        const d = new Date(row.bill_date)
+        const rowYear = d.getFullYear()
+        if(rowYear !== year) return
+
+        // 统计 service type
         const s = row.service_type || 'Unknown'
         serviceMap[s] = (serviceMap[s] || 0) + 1
 
-        const m = row.month
-        if (m && monthMap[m] !== undefined) {
-          monthMap[m] += 1
-        }
+        // 从日期自动拿月份，不再依赖 row.month 字段
+        const mIndex = d.getMonth()
+        const mName = MONTH_SHORT[mIndex]
+        monthMap[mName] += 1
       })
 
       const pieArr: ServicePieItem[] = Object.entries(serviceMap).map(([name, value]) => ({ name, value }))
       const barArr: MonthBarItem[] = Object.entries(monthMap).map(([name, count]) => ({ name, count }))
 
+      console.log('pie data', pieArr)
+      console.log('bar data', barArr)
       setServicePieData(pieArr)
       setMonthBarData(barArr)
       setLoading(false)
@@ -103,7 +106,7 @@ export default function ChartDashboard() {
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/dashboard')}
             className="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100"
           >
             ← Back
