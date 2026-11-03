@@ -81,25 +81,40 @@ export default function DataValidationChecker() {
     setRunLoading(true)
     setCheckResults([])
     try {
-      // 1. 获取 contract_branch 计划数据
+      // 1. 获取 contract_branch 计划数据，移除 .eq('year', year)
       const { data: planRaw, error: planErr } = await supabase
         .from('contract_branch')
-        .select('branch_name, month_of_year, schedule_rule')
-        .eq('year', year)
+        .select('branch_name, month_of_year, schedule_rule, start_date')
 
       if (planErr) throw planErr
 
-      // 2. 获取 maintenance_bills 账单数据
+      // 2. 获取 maintenance_bills 账单数据，移除 .eq('year', year)
       const { data: billRaw, error: billErr } = await supabase
         .from('maintenance_bills')
-        .select('branch_name, month, service_type')
-        .eq('year', year)
+        .select('branch_name, month, service_type, bill_date')
 
       if (billErr) throw billErr
 
+      // 前端过滤：按 start_date 年份筛选
+      const planFiltered = planRaw?.filter(item => {
+        if (!item.start_date) return false
+        const rowYear = new Date(item.start_date).getFullYear()
+        return rowYear === year
+      }) ?? []
+
+      // 前端过滤：按 bill_date 年份筛选
+      const billFiltered = billRaw?.filter(item => {
+        if (!item.bill_date) return false
+        const rowYear = new Date(item.bill_date).getFullYear()
+        return rowYear === year
+      }) ?? []
+
+      console.log('Filtered Plan Data:', planFiltered)
+      console.log('Filtered Bill Data:', billFiltered)
+
       // 分组计划：key = branch_name||month_of_year
       const planMap = new Map<string, { service: string | null; count: number }>()
-      planRaw?.forEach((item: { branch_name: string | null; month_of_year: string | null; schedule_rule: string | null }) => {
+      planFiltered.forEach((item: { branch_name: string | null; month_of_year: string | null; schedule_rule: string | null }) => {
         const b = item.branch_name?.trim()
         const m = item.month_of_year?.trim()
         if (!b || !m) return
@@ -120,7 +135,7 @@ export default function DataValidationChecker() {
 
       // 分组账单：key = branch_name||month
       const billMap = new Map<string, { service: string | null; count: number }>()
-      billRaw?.forEach((item: { branch_name: string | null; month: string | null; service_type: string | null }) => {
+      billFiltered.forEach((item: { branch_name: string | null; month: string | null; service_type: string | null }) => {
         const b = item.branch_name?.trim()
         const m = item.month?.trim()
         if (!b || !m) return
