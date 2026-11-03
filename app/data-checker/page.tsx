@@ -2,6 +2,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Workbook } from 'exceljs'
+import { createClient } from '@supabase/supabase-js'
+
+// 初始化 supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type ContractBranchRow = {
   id: bigint
@@ -55,7 +62,6 @@ export default function DataValidationChecker() {
 
   // ========== 权限校验 ==========
   useEffect(() => {
-    // TODO: 替换成你真实的用户role读取逻辑（supabase session / global state）
     const userRole = 'boss'
     setRole(userRole)
     if (userRole !== 'boss') {
@@ -73,37 +79,118 @@ export default function DataValidationChecker() {
 
   const runCheck = async () => {
     setRunLoading(true)
-    // TODO: 这里放 supabase query，拉 contract_branch + maintenance_bills，做对比
-    // 示例：
-    // const { data: planData } = await supabase.from('contract_branch').select('*').eq('year', year)
-    // const { data: billData } = await supabase.from('maintenance_bills').select('*').eq('year', year)
-    // 然后循环分组比对，组装 CheckResult[]
+    setCheckResults([])
+    try {
+      // 1. 获取 contract_branch 计划数据
+      const { data: planRaw, error: planErr } = await supabase
+        .from('contract_branch')
+        .select('branch_name, month_of_year, schedule_rule')
+        .eq('year', year)
 
-    setTimeout(() => {
-      setCheckResults([
-        {
-          branchName: 'CBTL KLCC',
-          month: 'Jan',
-          planService: 'GWM',
-          doneService: 'GWM',
-          planCount: 2,
-          doneCount: 2,
-          isMatch: true,
-          remark: 'OK'
-        },
-        {
-          branchName: 'Nandos Midvalley',
-          month: 'Jan',
-          planService: 'KPM',
-          doneService: 'GWM',
-          planCount: 1,
-          doneCount: 1,
-          isMatch: false,
-          remark: 'Service Type not match'
+      if (planErr) throw planErr
+
+      // 2. 获取 maintenance_bills 账单数据
+      const { data: billRaw, error: billErr } = await supabase
+        .from('maintenance_bills')
+        .select('branch_name, month, service_type')
+        .eq('year', year)
+
+      if (billErr) throw billErr
+
+      // 分组计划：key = branch_name||month_of_year
+      const planMap = new Map<string, { service: string | null; count: number }>()
+      planRaw?.forEach((item: { branch_name: string | null; month_of_year: string | null; schedule_rule: string | null }) => {
+        const b = item.branch_name?.trim()
+        const m = item.month_of_year?.trim()
+        if (!b || !m) return
+        const key = `${b}||${m}`
+        const prev = planMap.get(key)
+        if (prev) {
+          planMap.set(key, {
+            service: prev.service,
+            count: prev.count + 1
+          })
+        } else {
+          planMap.set(key, {
+            service: item.schedule_rule,
+            count: 1
+          })
         }
-      ])
+      })
+
+      // 分组账单：key = branch_name||month
+      const billMap = new Map<string, { service: string | null; count: number }>()
+      billRaw?.forEach((item: { branch_name: string | null; month: string | null; service_type: string | null }) => {
+        const b = item.branch_name?.trim()
+        const m = item.month?.trim()
+        if (!b || !m) return
+        const key = `${b}||${m}`
+        const prev = billMap.get(key)
+        if (prev) {
+          billMap.set(key, {
+            service: prev.service,
+            count: prev.count + 1
+          })
+        } else {
+          billMap.set(key, {
+            service: item.service_type,
+            count: 1
+          })
+        }
+      })
+
+      // 收集所有唯一分店+月份组合
+      const allKeys = new Set([...planMap.keys(), ...billMap.keys()])
+      const output: CheckResult[] = []
+
+      for (const key of allKeys) {
+        const [branchName, month] = key.split('||')
+        const plan = planMap.get(key)
+        const bill = billMap.get(key)
+
+        const planService = plan?.service ?? null
+        const doneService = bill?.service ?? null
+        const planCount = plan?.count ?? 0
+        const doneCount = bill?.count ?? 0
+
+        let isMatch = true
+        let remark = 'OK'
+
+        if (!plan && bill) {
+          isMatch = false
+          remark = 'Bill exists, no schedule plan'
+        } else if (plan && !bill) {
+          isMatch = false
+          remark = 'Schedule plan exists, no bill'
+        } else if (planCount !== doneCount) {
+          isMatch = false
+          remark = `Qty mismatch: Plan ${planCount}, Done ${doneCount}`
+        } else if (planService !== doneService) {
+          isMatch = false
+          remark = `Service type mismatch`
+        }
+
+        output.push({
+          branchName,
+          month,
+          planService,
+          doneService,
+          planCount,
+          doneCount,
+          isMatch,
+          remark
+        })
+      }
+
+      // 按分店名称排序
+      output.sort((a, b) => a.branchName.localeCompare(b.branchName))
+      setCheckResults(output)
+    } catch (err) {
+      console.error('Validation Error:', err)
+      alert('Query failed, check browser console log')
+    } finally {
       setRunLoading(false)
-    }, 800)
+    }
   }
 
   const exportExcel = async () => {
