@@ -420,8 +420,8 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         }`}
       />
 
-      {/* ========== 修改后的单行筛选栏 ========== */}
-      <div className="flex flex-nowrap items-center gap-1.5 mb-4 p-3 bg-white border border-gray-200 rounded-md shadow-sm overflow-x-auto">
+      {/* ========== 【单行筛选栏，强制不换行】 ========== */}
+      <div className="flex flex-nowrap items-center gap-1 mb-4 p-2 bg-white border border-gray-200 rounded-md shadow-sm overflow-x-auto">
         {/* ✅ 汉堡按钮放到 Monthly Schedule 左边 */}
         <button
           onClick={() => setSideOpen(!sideOpen)}
@@ -437,13 +437,13 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         </span>
 
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-sm font-medium text-gray-700">Customer:</span>
+          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Customer:</span>
           <button
             type="button"
             onClick={() => setCustomerFilter('all')}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === 'all'
-                ? 'bg-orange-700 text-white'
+                ? 'bg-red-700 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -454,7 +454,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             onClick={() => setCustomerFilter('CBTL')}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === 'CBTL'
-                ? 'bg-orange-700 text-white'
+                ? 'bg-red-700 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -465,7 +465,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             onClick={() => setCustomerFilter("Nando's")}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === "Nando's"
-                ? 'bg-orange-700 text-white'
+                ? 'bg-red-700 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -475,7 +475,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
 
         {/* ✅ Service Type 筛选下拉 */}
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-sm font-medium text-gray-700">Service:</span>
+          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Service:</span>
           <select
             value={serviceFilter}
             onChange={(e) => setServiceFilter(e.target.value as any)}
@@ -497,7 +497,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
               onClick={() => setActiveMonth(m)}
               className={`w-7 h-7 text-xs border rounded transition-colors ${
                 activeMonth === m
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  ? 'bg-red-700 text-white border-red-700 shadow-sm'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
@@ -512,13 +512,13 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Search branch / customer"
-            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm min-w-28 max-w-40 shrink focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm min-w-24 max-w-32 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
           />
 
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
           >
             <option value={2026}>2026</option>
             <option value={2027}>2027</option>
