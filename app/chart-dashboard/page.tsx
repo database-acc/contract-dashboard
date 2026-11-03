@@ -12,6 +12,7 @@ import {
   Pie,
   Cell,
 } from 'recharts'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -19,7 +20,15 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+// 和你 Dashboard badge 颜色统一
+const SERVICE_COLOR_MAP: Record<string, string> = {
+  GWM: '#0ea5e9',
+  KPM: '#8b5cf6',
+  KPS: '#10b981',
+  GTC: '#f59e0b',
+  Unknown: '#6b7280'
+}
+const DEFAULT_COLOR = '#6b7280'
 
 type ServicePieItem = {
   name: string
@@ -38,6 +47,7 @@ type ChartRow = {
 }
 
 export default function ChartDashboard() {
+  const router = useRouter()
   const [year, setYear] = useState(2026)
   const [servicePieData, setServicePieData] = useState<ServicePieItem[]>([])
   const [monthBarData, setMonthBarData] = useState<MonthBarItem[]>([])
@@ -91,9 +101,17 @@ export default function ChartDashboard() {
   return (
     <div className="p-4 md:p-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-xl font-bold">Contract Chart Dashboard</h1>
-          <p className="text-sm text-gray-500">Overview of maintenance bills</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100"
+          >
+            ← Back
+          </button>
+          <div>
+            <h1 className="text-xl font-bold">Contract Chart Dashboard</h1>
+            <p className="text-sm text-gray-500">Overview of maintenance bills</p>
+          </div>
         </div>
         <select
           value={year}
@@ -109,7 +127,7 @@ export default function ChartDashboard() {
         <div className="py-20 text-center">Loading chart data...</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border rounded-lg p-4 bg-white">
+          <div className="border rounded-lg p-4 bg-white shadow-sm">
             <h2 className="font-semibold mb-4">Service Type Distribution</h2>
             <ResponsiveContainer width="100%" height={320}>
               <PieChart>
@@ -122,8 +140,8 @@ export default function ChartDashboard() {
                   paddingAngle={2}
                   dataKey="value"
                 >
-                  {servicePieData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {servicePieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -131,7 +149,7 @@ export default function ChartDashboard() {
             </ResponsiveContainer>
           </div>
 
-          <div className="border rounded-lg p-4 bg-white">
+          <div className="border rounded-lg p-4 bg-white shadow-sm">
             <h2 className="font-semibold mb-4">Monthly Job Count</h2>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={monthBarData}>
@@ -139,7 +157,7 @@ export default function ChartDashboard() {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="count" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
