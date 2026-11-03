@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,11 +17,13 @@ export const metadata: Metadata = {
   description: "维修合同管理后台",
 };
 
-// Next16 必须单独导出 viewport
-export const viewport = {
+// Next16 viewport 允许用户缩放
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
+  minimumScale: 0.5,
+  userScalable: true,
 };
 
 type LayoutProps = {
