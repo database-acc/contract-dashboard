@@ -414,6 +414,16 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             Data Validation Checker
           </a>
         )}
+        {/* ✅ Chart Dashboard 按钮（新开标签页，和上面样式统一） */}
+        <a
+          href="/chart-dashboard"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setSideOpen(false)}
+          className="block mt-1 bg-slate-600 text-white px-3 py-2 rounded text-sm hover:bg-slate-700 transition-colors shadow-sm text-center"
+        >
+          Chart Dashboard
+        </a>
 
         <button
           onClick={() => setSideOpen(false)}
