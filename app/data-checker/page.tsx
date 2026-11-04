@@ -14,28 +14,39 @@ type ContractBranchRow = {
   branch_name: string | null
   company_name: string | null
   frequency: string | null
+  description: string | null
   start_date: string | null
   end_date: string | null
-  status: string | null
   month_of_year: string | null
   times_per_year: string | null
   schedule_rule: string | null
   project: string | null
 }
 
-type CheckResult = {
+type MaintenanceBillRow = {
+  id: bigint
+  schedule_month_ref: string | null
+  month: string | null
+  company_name: string | null
+  branch_name: string | null
+  doc_no: string | null
+  bill_date: string | null
+}
+
+type ScheduleItem = {
   branchName: string
   companyName: string
-  month: string
   planService: string | null
-  statusTag: string | null
-  remark: string
+  year: number
+  month: number
+  monthLabel: string
+  status: 'On Time' | 'Done (Late)' | 'Partial Done' | 'Not Start'
 }
 
 type StatSummary = {
   totalPlan: number
-  groupDone: number // Done + Done (Late)
-  groupPending: number // Not Start + Partial Done
+  groupDone: number
+  groupPending: number
 }
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -45,10 +56,11 @@ export default function DataValidationChecker() {
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(2026)
-  const [checkResults, setCheckResults] = useState<CheckResult[]>([])
+  const [items, setItems] = useState<ScheduleItem[]>([])
   const [stat, setStat] = useState<StatSummary>({ totalPlan:0, groupDone:0, groupPending:0 })
 
   useEffect(() => {
+    // 权限校验 boss only
     const userRole = 'boss'
     setRole(userRole)
     if (userRole !== 'boss') {
@@ -61,50 +73,78 @@ export default function DataValidationChecker() {
   if (role !== 'boss') return null
 
   const runCheck = async () => {
-    setCheckResults([])
+    setItems([])
     setStat({ totalPlan:0, groupDone:0, groupPending:0 })
 
-    // 用你原本 Dashboard 在用的表 contract_branch
-    const { data: scheduleRaw, error: err } = await supabase
+    // 1. 拿 contract_branch
+    const { data: branches, error: errBr } = await supabase
       .from('contract_branch')
       .select('*')
-
-    if (err) {
-      alert('读取 contract_branch 失败: ' + err.message)
+    if (errBr) {
+      alert('读取 contract_branch 失败：' + errBr.message)
       return
     }
 
-    const scheduleList = scheduleRaw as ContractBranchRow[]
-    const output: CheckResult[] = []
-    let totalPlan = 0
-    let groupDone = 0
-    let groupPending = 0
+    // 2. 拿 bills
+    const { data: bills, error: errBill } = await supabase
+      .from('maintenance_bills')
+      .select('*')
+    if (errBill) {
+      alert('读取 maintenance_bills 失败：' + errBill.message)
+      return
+    }
 
-    scheduleList.forEach(row => {
-      if (!row.branch_name) return
-      totalPlan +=1
-      const st = row.status ?? 'Not Start'
+    const billList = bills as MaintenanceBillRow[]
+    const resultList: ScheduleItem[] = []
 
-      // 和 Dashboard 一样分组
-      if(st === 'Done' || st === 'Done (Late)'){
-        groupDone +=1
-      }else{
-        groupPending +=1
+    // 重现 Dashboard 展开逻辑
+    (branches as ContractBranchRow[]).forEach(br => {
+      if (!br.branch_name || !br.start_date || !br.end_date) return
+      const start = new Date(br.start_date)
+      const end = new Date(br.end_date)
+
+      // 遍历这个合同有效期内的每一个月
+      let cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+      while (cursor <= end) {
+        const y = cursor.getFullYear()
+        const m = cursor.getMonth() + 1
+
+        // 只保留选择的年份
+        if (y === year) {
+          const refKey = `${br.branch_name}-${y}-${String(m).padStart(2,'0')}`
+          const matchedBill = billList.find(b => b.schedule_month_ref === refKey)
+
+          let status: ScheduleItem['status']
+          if (matchedBill) {
+            // 有工单，判断是否准时
+            const billDate = new Date(matchedBill.bill_date!)
+            const dueDate = new Date(y, m, 15) // 和你dashboard同样的判断基准
+            status = billDate <= dueDate ? 'On Time' : 'Done (Late)'
+          } else {
+            status = 'Not Start'
+          }
+
+          resultList.push({
+            branchName: br.branch_name,
+            companyName: br.company_name ?? '-',
+            planService: br.frequency,
+            year: y,
+            month: m,
+            monthLabel: `${MONTH_SHORT[m-1]} ${y}`,
+            status
+          })
+        }
+        // next month
+        cursor.setMonth(cursor.getMonth() + 1)
       }
-
-      output.push({
-        branchName: row.branch_name,
-        companyName: row.company_name ?? '-',
-        month: row.month_of_year ? row.month_of_year : '-',
-        planService: row.frequency,
-        statusTag: st,
-        remark: st
-      })
     })
 
-    output.sort((a,b) => a.branchName.localeCompare(b.branchName))
+    // 统计
+    let totalPlan = resultList.length
+    let groupDone = resultList.filter(i => i.status === 'On Time' || i.status === 'Done (Late)').length
+    let groupPending = resultList.filter(i => i.status === 'Not Start' || i.status === 'Partial Done').length
 
-    setCheckResults(output)
+    setItems(resultList)
     setStat({ totalPlan, groupDone, groupPending })
   }
 
@@ -114,7 +154,7 @@ export default function DataValidationChecker() {
         <div>
           <h1 className="text-xl font-bold">Data Validation Checker</h1>
           <p className="text-gray-500 text-sm">
-            Contract Branch Status Counter (Same source as Dashboard)
+            Monthly Schedule Counter (Same calculation logic as Dashboard)
           </p>
         </div>
         <button
@@ -145,15 +185,14 @@ export default function DataValidationChecker() {
         </button>
       </div>
 
-      {/* 统计卡片 */}
-      {checkResults.length > 0 && (
+      {items.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="border rounded p-4 bg-slate-50">
             <div className="text-sm text-gray-500">Total Plan (Schedule)</div>
             <div className="text-2xl font-bold mt-1">{stat.totalPlan}</div>
           </div>
           <div className="border rounded p-4 bg-green-50">
-            <div className="text-sm text-gray-600">✅ Done + Done (Late)</div>
+            <div className="text-sm text-gray-600">✅ On Time + Done (Late)</div>
             <div className="text-2xl font-bold mt-1 text-green-700">{stat.groupDone}</div>
           </div>
           <div className="border rounded p-4 bg-amber-50">
@@ -171,24 +210,23 @@ export default function DataValidationChecker() {
               <th className="p-2 text-left">Outlet / Branch</th>
               <th className="p-2 text-left">Company</th>
               <th className="p-2 text-center">Month</th>
-              <th className="p-2 text-center">Frequency</th>
+              <th className="p-2 text-center">Plan Service</th>
               <th className="p-2 text-center">Status</th>
-              <th className="p-2 text-left">Remark</th>
             </tr>
           </thead>
           <tbody>
-            {checkResults.length === 0 ? (
+            {items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-4 text-center text-gray-500">
-                  Click [Run Validation Check] to load contract branch data
+                <td colSpan={6} className="p-4 text-center text-gray-500">
+                  Click [Run Validation Check] to load monthly schedule data
                 </td>
               </tr>
             ) : (
-              checkResults.map((row, idx) => (
+              items.map((row, idx) => (
                 <tr
                   key={idx}
                   className={
-                    row.statusTag === 'Done' || row.statusTag === 'Done (Late)'
+                    row.status === 'On Time' || row.status === 'Done (Late)'
                       ? 'bg-green-50'
                       : 'bg-amber-50'
                   }
@@ -196,12 +234,9 @@ export default function DataValidationChecker() {
                   <td className="p-2 text-center text-gray-500">{idx + 1}</td>
                   <td className="p-2">{row.branchName}</td>
                   <td className="p-2">{row.companyName}</td>
-                  <td className="p-2 text-center">{row.month}</td>
+                  <td className="p-2 text-center">{row.monthLabel}</td>
                   <td className="p-2 text-center">{row.planService ?? '-'}</td>
-                  <td className="p-2 text-center font-semibold">
-                    {row.statusTag ?? '-'}
-                  </td>
-                  <td className="p-2">{row.remark}</td>
+                  <td className="p-2 text-center font-semibold">{row.status}</td>
                 </tr>
               ))
             )}
