@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
@@ -53,50 +53,46 @@ type CheckResult = {
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-// 从 contract_no 截取服务类型 GWM/KPM/KPS/GTC
 function extractServiceFromContractNo(contractNo: string | null | undefined): string | null {
   if (!contractNo) return null
   const parts = String(contractNo).split('-')
-  if(parts.length >=2) {
+  if (parts.length >= 2) {
     const t = parts[1].trim()
-    if(['GWM','KPM','KPS','GTC'].includes(t)) return t
+    if (['GWM','KPM','KPS','GTC'].includes(t)) return t
   }
   return null
 }
 
-// 解析 month_of_year "1,4,7,10" => [1,4,7,10]
 function parseMonthOfYear(val: string | null): number[] {
-  if(!val) return []
+  if (!val) return []
   return val.split(',')
-    .map(s=>parseInt(s.trim(),10))
-    .filter(n=>!Number.isNaN(n) && n>=1 && n<=12)
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => !Number.isNaN(n) && n >= 1 && n <= 12)
 }
 
-// 根据 frequency 获取默认执行月份
-function getFreqMonths(freq:string|null):number[]{
-  if(freq === 'monthly') return [1,2,3,4,5,6,7,8,9,10,11,12]
-  if(freq === 'quarterly') return [1,4,7,10]
-  if(freq === 'half_year') return [1,7]
+function getFreqMonths(freq: string | null): number[] {
+  if (freq === 'monthly') return [1,2,3,4,5,6,7,8,9,10,11,12]
+  if (freq === 'quarterly') return [1,4,7,10]
+  if (freq === 'half_year') return [1,7]
   return []
 }
 
-// 解析 schedule_month_ref / month 字段，支持 & 多月份：May‑24 / 2024‑05
-function parseScheduleMonth(raw:string|null):Array<{y:number,m:number}>{
-  if(!raw) return []
-  const out:Array<{y:number,m:number}> = []
-  const items = raw.split('&').map(s=>s.trim()).filter(Boolean)
-  for(const it of items){
+function parseScheduleMonth(raw: string | null): Array<{ y: number; m: number }> {
+  if (!raw) return []
+  const out: Array<{ y: number; m: number }> = []
+  const items = raw.split('&').map(s => s.trim()).filter(Boolean)
+  for (const it of items) {
     const dashMatch = it.match(/^([A-Za-z]{3})-(\d{2})$/)
-    if(dashMatch){
-      const mIdx = MONTH_SHORT.findIndex(x=>x.toLowerCase() === dashMatch[1].toLowerCase())
-      if(mIdx !== -1){
-        out.push({y:2000+Number(dashMatch[2]), m: mIdx+1})
+    if (dashMatch) {
+      const mIdx = MONTH_SHORT.findIndex(x => x.toLowerCase() === dashMatch[1].toLowerCase())
+      if (mIdx !== -1) {
+        out.push({ y: 2000 + Number(dashMatch[2]), m: mIdx + 1 })
       }
       continue
     }
     const isoMatch = it.match(/^(\d{4})-(\d{1,2})$/)
-    if(isoMatch){
-      out.push({y:Number(isoMatch[1]), m:Number(isoMatch[2])})
+    if (isoMatch) {
+      out.push({ y: Number(isoMatch[1]), m: Number(isoMatch[2]) })
     }
   }
   return out
@@ -109,9 +105,7 @@ export default function DataValidationChecker() {
   const [year, setYear] = useState(2026)
   const [checkResults, setCheckResults] = useState<CheckResult[]>([])
 
-  // ========== Boss权限校验 ==========
   useEffect(() => {
-    // TODO: 后续替换成真实登录角色读取，现在模拟boss
     const userRole = 'boss'
     setRole(userRole)
     if (userRole !== 'boss') {
@@ -123,96 +117,101 @@ export default function DataValidationChecker() {
   if (loading) return <div className="p-6">Checking permission...</div>
   if (role !== 'boss') return null
 
-  // ========== 执行交叉校验 ==========
   const runCheck = async () => {
     setCheckResults([])
-    // 1.读取活跃合同
-    const {data:contractsRaw, error:errC} = await supabase
+
+    const { data: contractsRaw, error: errC } = await supabase
       .from('contract_branch')
       .select('*')
-      .eq('status','active')
-    if(errC){
-      alert('读取contract_branch失败:'+errC.message)
+      .eq('status', 'active')
+
+    if (errC) {
+      alert('读取contract_branch失败: ' + errC.message)
       return
     }
+
     const contracts = contractsRaw as ContractBranchRow[]
 
-    // 2.读取账单，【关键过滤：只取project包含CONTRACT，排除非合同工单】
-    const {data:billsRaw,error:errB} = await supabase.from('maintenance_bills').select('*')
-    if(errB){
-      alert('读取maintenance_bills失败:'+errB.message)
+    const { data: billsRaw, error: errB } = await supabase
+      .from('maintenance_bills')
+      .select('*')
+
+    if (errB) {
+      alert('读取maintenance_bills失败: ' + errB.message)
       return
     }
+
     const billsAll = billsRaw as MaintenanceBillRow[]
-    const contractBills = billsAll.filter(b=>{
-      if(!b.project) return false
+
+    const contractBills = billsAll.filter(b => {
+      if (!b.project) return false
       return b.project.toUpperCase().includes('CONTRACT')
     })
 
-    // 构建账单映射 key: branchName|service|YYYY-MM
-    const billMap = new Map<string,MaintenanceBillRow>()
-    contractBills.forEach(bill=>{
-      if(!bill.branch_name || !bill.service_type) return
+    const billMap = new Map<string, MaintenanceBillRow>()
+
+    contractBills.forEach(bill => {
+      if (!bill.branch_name || !bill.service_type) return
       const bName = bill.branch_name.trim()
       const sType = bill.service_type.trim()
       const monthList = parseScheduleMonth(bill.schedule_month_ref ?? bill.month)
-      for(const sm of monthList){
-        const key = `${bName}|${sType}|${sm.y}-${String(sm.m).padStart(2,'0')}`
-        if(!billMap.has(key)){
-          billMap.set(key,bill)
+
+      for (const sm of monthList) {
+        const key = `${bName}|${sType}|${sm.y}-${String(sm.m).padStart(2, '0')}`
+        if (!billMap.has(key)) {
+          billMap.set(key, bill)
         }
       }
     })
 
-    // 遍历合同生成【计划任务清单】
-    const output:CheckResult[] = []
-    contracts.forEach(ct=>{
-      if(!ct.branch_name) return
+    const output: CheckResult[] = []
+
+    contracts.forEach(ct => {
+      if (!ct.branch_name) return
       const brName = ct.branch_name.trim()
       const srv = extractServiceFromContractNo(ct.contract_no)
-      if(!srv) return
+      if (!srv) return
 
-      // 判断合同起止年份
       const startY = ct.start_date ? Number(ct.start_date.split('-')[0]) : 2020
       const endY = ct.end_date ? Number(ct.end_date.split('-')[0]) : 2030
-      if(year < startY || year> endY) return
 
-      // 获取该合同需要执行的月份
-      let targetMonths:number[] = []
-      if(ct.month_of_year && ct.month_of_year.trim()){
+      if (year < startY || year > endY) return
+
+      let targetMonths: number[] = []
+
+      if (ct.month_of_year && ct.month_of_year.trim()) {
         targetMonths = parseMonthOfYear(ct.month_of_year)
-      }else{
+      } else {
         targetMonths = getFreqMonths(ct.frequency)
       }
 
-      // 循环每一个计划月份
-      targetMonths.forEach(m=>{
-        const ymKey = `${year}-${String(m).padStart(2,'0')}`
+      targetMonths.forEach(m => {
+        const ymKey = `${year}-${String(m).padStart(2, '0')}`
         const lookupKey = `${brName}|${srv}|${ymKey}`
         const matchedBill = billMap.get(lookupKey)
 
         let remark = ''
         let isMatch = false
-        let doneSrv: string|null = null
+        let doneSrv: string | null = null
         let doneCnt = 0
         const planCnt = 1
 
-        if(matchedBill){
+        if (matchedBill) {
           isMatch = true
           doneSrv = matchedBill.service_type
-          doneCnt =1
+          doneCnt = 1
           remark = 'OK：计划与账单匹配'
-        }else{
+        } else {
           isMatch = false
           remark = '🔴Missing bill：存在计划，未找到对应合同工单'
           doneSrv = null
-          doneCnt =0
+          doneCnt = 0
         }
 
         output.push({
           branchName: brName,
           companyName: ct.company_name ?? '-',
-          month: `${MONTH_SHORT[m-1]} ${year}`,
+          month: `${MONTH_SHORT[m - 1]} ${year}`,
           planService: srv,
           doneService: doneSrv,
           planCount: planCnt,
@@ -223,10 +222,13 @@ export default function DataValidationChecker() {
       })
     })
 
-    output.sort((a,b)=>{
-      if(a.branchName.localeCompare(b.branchName)!==0) return a.branchName.localeCompare(b.branchName)
+    output.sort((a, b) => {
+      if (a.branchName.localeCompare(b.branchName) !== 0) {
+        return a.branchName.localeCompare(b.branchName)
+      }
       return a.month.localeCompare(b.month)
     })
+
     setCheckResults(output)
   }
 
@@ -271,6 +273,7 @@ export default function DataValidationChecker() {
         <table className="min-w-full text-sm border-collapse">
           <thead className="bg-slate-700 text-white">
             <tr>
+              <th className="p-2 text-center w-12">No.</th>
               <th className="p-2 text-left">Outlet / Branch</th>
               <th className="p-2 text-left">Company</th>
               <th className="p-2 text-center">Month</th>
@@ -280,8 +283,6 @@ export default function DataValidationChecker() {
               <th className="p-2 text-center">Done Qty</th>
               <th className="p-2 text-center">Status</th>
               <th className="p-2 text-left">Remark</th>
-              {/* ✅ 最右侧增加No.序号 */}
-              <th className="p-2 text-center w-12">No.</th>
             </tr>
           </thead>
           <tbody>
@@ -297,6 +298,7 @@ export default function DataValidationChecker() {
                   key={idx}
                   className={row.isMatch ? 'bg-green-50' : 'bg-red-50'}
                 >
+                  <td className="p-2 text-center text-gray-500">{idx + 1}</td>
                   <td className="p-2">{row.branchName}</td>
                   <td className="p-2">{row.companyName}</td>
                   <td className="p-2 text-center">{row.month}</td>
@@ -308,7 +310,6 @@ export default function DataValidationChecker() {
                     {row.isMatch ? '✅ Match' : '❌ Mismatch'}
                   </td>
                   <td className="p-2">{row.remark}</td>
-                  <td className="p-2 text-center text-gray-500">{idx+1}</td>
                 </tr>
               ))
             )}
