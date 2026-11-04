@@ -8,35 +8,15 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type ContractBranchRow = {
+type MonthlyScheduleRow = {
   id: bigint
-  contract_no: string | null | undefined
-  project: string | null
-  description: string | null
   branch_name: string | null
-  frequency: string | null
   company_name: string | null
-  start_date: string | null
-  end_date: string | null
+  plan_service: string | null
+  done_service: string | null
+  month: number | null
+  year: number | null
   status: string | null
-  month_of_year: string | null
-  times_per_year: string | null
-  schedule_rule: string | null
-}
-
-type MaintenanceBillRow = {
-  id: bigint
-  area_code: string | null
-  month: string | null
-  schedule_month_ref: string | null
-  doc_no: string | null
-  bill_date: string | null
-  company_name: string | null
-  branch_name: string | null
-  service_type: string | null
-  status: string | null
-  price: number | null
-  project: string | null
 }
 
 type CheckResult = {
@@ -45,11 +25,8 @@ type CheckResult = {
   month: string
   planService: string | null
   doneService: string | null
-  planCount: number
-  doneCount: number
-  isMatch: boolean
+  statusTag: string | null
   remark: string
-  statusTag?: string
 }
 
 type StatSummary = {
@@ -59,51 +36,6 @@ type StatSummary = {
 }
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function extractServiceFromContractNo(contractNo: string | null | undefined): string | null {
-  if (!contractNo) return null
-  const parts = String(contractNo).split('-')
-  if (parts.length >= 2) {
-    const t = parts[1].trim()
-    if (['GWM','KPM','KPS','GTC'].includes(t)) return t
-  }
-  return null
-}
-
-function parseMonthOfYear(val: string | null): number[] {
-  if (!val) return []
-  return val.split(',')
-    .map(s => parseInt(s.trim(), 10))
-    .filter(n => !Number.isNaN(n) && n >= 1 && n <= 12)
-}
-
-function getFreqMonths(freq: string | null): number[] {
-  if (freq === 'monthly') return [1,2,3,4,5,6,7,8,9,10,11,12]
-  if (freq === 'quarterly') return [1,4,7,10]
-  if (freq === 'half_year') return [1,7]
-  return []
-}
-
-function parseScheduleMonth(raw: string | null): Array<{ y: number; m: number }> {
-  if (!raw) return []
-  const out: Array<{ y: number; m: number }> = []
-  const items = raw.split('&').map(s => s.trim()).filter(Boolean)
-  for (const it of items) {
-    const dashMatch = it.match(/^([A-Za-z]{3})-(\d{2})$/)
-    if (dashMatch) {
-      const mIdx = MONTH_SHORT.findIndex(x => x.toLowerCase() === dashMatch[1].toLowerCase())
-      if (mIdx !== -1) {
-        out.push({ y: 2000 + Number(dashMatch[2]), m: mIdx + 1 })
-      }
-      continue
-    }
-    const isoMatch = it.match(/^(\d{4})-(\d{1,2})$/)
-    if (isoMatch) {
-      out.push({ y: Number(isoMatch[1]), m: Number(isoMatch[2]) })
-    }
-  }
-  return out
-}
 
 export default function DataValidationChecker() {
   const router = useRouter()
@@ -129,137 +61,47 @@ export default function DataValidationChecker() {
     setCheckResults([])
     setStat({ totalPlan:0, groupDone:0, groupPending:0 })
 
-    const { data: contractsRaw, error: errC } = await supabase
-      .from('contract_branch')
+    // 直接读取 monthly_schedule，和 Dashboard 同一个表！
+    const { data: scheduleRaw, error: err } = await supabase
+      .from('monthly_schedule')
       .select('*')
-      .eq('status', 'active')
+      .eq('year', year)
 
-    if (errC) {
-      alert('读取contract_branch失败: ' + errC.message)
+    if (err) {
+      alert('读取 monthly_schedule 失败: ' + err.message)
       return
     }
 
-    const contracts = contractsRaw as ContractBranchRow[]
-
-    const { data: billsRaw, error: errB } = await supabase
-      .from('maintenance_bills')
-      .select('*')
-
-    if (errB) {
-      alert('读取maintenance_bills失败: ' + errB.message)
-      return
-    }
-
-    const billsAll = billsRaw as MaintenanceBillRow[]
-
-    const contractBills = billsAll.filter(b => {
-      if (!b.project) return false
-      return b.project.toUpperCase().includes('CONTRACT')
-    })
-
-    const billMap = new Map<string, MaintenanceBillRow>()
-    contractBills.forEach(bill => {
-      if (!bill.branch_name || !bill.service_type) return
-      const bName = bill.branch_name.trim()
-      const sType = bill.service_type.trim()
-      const monthList = parseScheduleMonth(bill.schedule_month_ref ?? bill.month)
-      for (const sm of monthList) {
-        const key = `${bName}|${sType}|${sm.y}-${String(sm.m).padStart(2, '0')}`
-        if (!billMap.has(key)) {
-          billMap.set(key, bill)
-        }
-      }
-    })
-
+    const scheduleList = scheduleRaw as MonthlyScheduleRow[]
     const output: CheckResult[] = []
     let totalPlan = 0
     let groupDone = 0
     let groupPending = 0
 
-    contracts.forEach(ct => {
-      if (!ct.branch_name) return
-      const brName = ct.branch_name.trim()
-      const srv = extractServiceFromContractNo(ct.contract_no)
-      if (!srv) return
+    scheduleList.forEach(row => {
+      if (!row.branch_name) return
+      totalPlan +=1
+      const st = row.status ?? 'Not Start'
 
-      const startY = ct.start_date ? Number(ct.start_date.split('-')[0]) : 2020
-      const endY = ct.end_date ? Number(ct.end_date.split('-')[0]) : 2030
-      if (year < startY || year > endY) return
-
-      let targetMonths: number[] = []
-      if (ct.month_of_year && ct.month_of_year.trim()) {
-        targetMonths = parseMonthOfYear(ct.month_of_year)
-      } else {
-        targetMonths = getFreqMonths(ct.frequency)
+      // 分组规则 和 Dashboard 保持一致
+      if(st === 'Done' || st === 'Done (Late)'){
+        groupDone +=1
+      }else{
+        groupPending +=1
       }
 
-      targetMonths.forEach(m => {
-        totalPlan += 1
-        const ymKey = `${year}-${String(m).padStart(2, '0')}`
-        const lookupKey = `${brName}|${srv}|${ymKey}`
-        const matchedBill = billMap.get(lookupKey)
-
-        let remark = ''
-        let isMatch = false
-        let doneSrv: string | null = null
-        let doneCnt = 0
-        const planCnt = 1
-        let statusTag = 'Not Start'
-
-        if (matchedBill) {
-          doneSrv = matchedBill.service_type
-          doneCnt = 1
-          // 模拟dashboard状态逻辑（和你dashboard保持一致）
-          if(matchedBill.status === 'Done (Late)'){
-            statusTag = 'Done (Late)'
-            remark = 'OK：计划与账单匹配 - Done Late'
-          }else if(matchedBill.status === 'Done'){
-            statusTag = 'Done'
-            remark = 'OK：计划与账单匹配 - On Time'
-          }else if(matchedBill.status === 'Partial Done'){
-            statusTag = 'Partial Done'
-            remark = 'Partial Done'
-          }else{
-            statusTag = 'Not Start'
-            remark = 'Not Start'
-          }
-          isMatch = true
-        } else {
-          isMatch = false
-          statusTag = 'Not Start'
-          remark = '🔴Missing bill：存在计划，未找到对应合同工单'
-          doneSrv = null
-          doneCnt = 0
-        }
-
-        // 分组统计
-        if(statusTag === 'Done' || statusTag === 'Done (Late)'){
-          groupDone +=1
-        }else{
-          groupPending +=1
-        }
-
-        output.push({
-          branchName: brName,
-          companyName: ct.company_name ?? '-',
-          month: `${MONTH_SHORT[m - 1]} ${year}`,
-          planService: srv,
-          doneService: doneSrv,
-          planCount: planCnt,
-          doneCount: doneCnt,
-          isMatch,
-          remark,
-          statusTag
-        })
+      output.push({
+        branchName: row.branch_name,
+        companyName: row.company_name ?? '-',
+        month: row.month ? `${MONTH_SHORT[row.month -1]} ${year}` : '-',
+        planService: row.plan_service,
+        doneService: row.done_service,
+        statusTag: st,
+        remark: st
       })
     })
 
-    output.sort((a, b) => {
-      if (a.branchName.localeCompare(b.branchName) !== 0) {
-        return a.branchName.localeCompare(b.branchName)
-      }
-      return a.month.localeCompare(b.month)
-    })
+    output.sort((a,b) => a.branchName.localeCompare(b.branchName))
 
     setCheckResults(output)
     setStat({ totalPlan, groupDone, groupPending })
@@ -271,7 +113,7 @@ export default function DataValidationChecker() {
         <div>
           <h1 className="text-xl font-bold">Data Validation Checker</h1>
           <p className="text-gray-500 text-sm">
-            Cross‑check contract plan vs maintenance bills【Only project containing CONTRACT】
+            Monthly Schedule Status Counter (Same source as Dashboard)
           </p>
         </div>
         <button
@@ -302,7 +144,7 @@ export default function DataValidationChecker() {
         </button>
       </div>
 
-      {/* ========== 新增统计面板 ========== */}
+      {/* 统计卡片 */}
       {checkResults.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="border rounded p-4 bg-slate-50">
@@ -330,8 +172,6 @@ export default function DataValidationChecker() {
               <th className="p-2 text-center">Month</th>
               <th className="p-2 text-center">Plan Service</th>
               <th className="p-2 text-center">Done Service</th>
-              <th className="p-2 text-center">Plan Qty</th>
-              <th className="p-2 text-center">Done Qty</th>
               <th className="p-2 text-center">Status</th>
               <th className="p-2 text-left">Remark</th>
             </tr>
@@ -339,15 +179,19 @@ export default function DataValidationChecker() {
           <tbody>
             {checkResults.length === 0 ? (
               <tr>
-                <td colSpan={10} className="p-4 text-center text-gray-500">
-                  Click [Run Validation Check] to start cross checking
+                <td colSpan={8} className="p-4 text-center text-gray-500">
+                  Click [Run Validation Check] to load monthly schedule data
                 </td>
               </tr>
             ) : (
               checkResults.map((row, idx) => (
                 <tr
                   key={idx}
-                  className={row.isMatch ? 'bg-green-50' : 'bg-red-50'}
+                  className={
+                    row.statusTag === 'Done' || row.statusTag === 'Done (Late)'
+                      ? 'bg-green-50'
+                      : 'bg-amber-50'
+                  }
                 >
                   <td className="p-2 text-center text-gray-500">{idx + 1}</td>
                   <td className="p-2">{row.branchName}</td>
@@ -355,8 +199,6 @@ export default function DataValidationChecker() {
                   <td className="p-2 text-center">{row.month}</td>
                   <td className="p-2 text-center">{row.planService ?? '-'}</td>
                   <td className="p-2 text-center">{row.doneService ?? '-'}</td>
-                  <td className="p-2 text-center">{row.planCount}</td>
-                  <td className="p-2 text-center">{row.doneCount}</td>
                   <td className="p-2 text-center font-semibold">
                     {row.statusTag ?? '-'}
                   </td>
