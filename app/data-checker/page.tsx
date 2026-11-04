@@ -49,6 +49,13 @@ type CheckResult = {
   doneCount: number
   isMatch: boolean
   remark: string
+  statusTag?: string
+}
+
+type StatSummary = {
+  totalPlan: number
+  groupDone: number // Done + Done (Late)
+  groupPending: number // Not Start + Partial Done
 }
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -104,6 +111,7 @@ export default function DataValidationChecker() {
   const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(2026)
   const [checkResults, setCheckResults] = useState<CheckResult[]>([])
+  const [stat, setStat] = useState<StatSummary>({ totalPlan:0, groupDone:0, groupPending:0 })
 
   useEffect(() => {
     const userRole = 'boss'
@@ -119,6 +127,7 @@ export default function DataValidationChecker() {
 
   const runCheck = async () => {
     setCheckResults([])
+    setStat({ totalPlan:0, groupDone:0, groupPending:0 })
 
     const { data: contractsRaw, error: errC } = await supabase
       .from('contract_branch')
@@ -149,13 +158,11 @@ export default function DataValidationChecker() {
     })
 
     const billMap = new Map<string, MaintenanceBillRow>()
-
     contractBills.forEach(bill => {
       if (!bill.branch_name || !bill.service_type) return
       const bName = bill.branch_name.trim()
       const sType = bill.service_type.trim()
       const monthList = parseScheduleMonth(bill.schedule_month_ref ?? bill.month)
-
       for (const sm of monthList) {
         const key = `${bName}|${sType}|${sm.y}-${String(sm.m).padStart(2, '0')}`
         if (!billMap.has(key)) {
@@ -165,6 +172,9 @@ export default function DataValidationChecker() {
     })
 
     const output: CheckResult[] = []
+    let totalPlan = 0
+    let groupDone = 0
+    let groupPending = 0
 
     contracts.forEach(ct => {
       if (!ct.branch_name) return
@@ -174,11 +184,9 @@ export default function DataValidationChecker() {
 
       const startY = ct.start_date ? Number(ct.start_date.split('-')[0]) : 2020
       const endY = ct.end_date ? Number(ct.end_date.split('-')[0]) : 2030
-
       if (year < startY || year > endY) return
 
       let targetMonths: number[] = []
-
       if (ct.month_of_year && ct.month_of_year.trim()) {
         targetMonths = parseMonthOfYear(ct.month_of_year)
       } else {
@@ -186,6 +194,7 @@ export default function DataValidationChecker() {
       }
 
       targetMonths.forEach(m => {
+        totalPlan += 1
         const ymKey = `${year}-${String(m).padStart(2, '0')}`
         const lookupKey = `${brName}|${srv}|${ymKey}`
         const matchedBill = billMap.get(lookupKey)
@@ -195,17 +204,39 @@ export default function DataValidationChecker() {
         let doneSrv: string | null = null
         let doneCnt = 0
         const planCnt = 1
+        let statusTag = 'Not Start'
 
         if (matchedBill) {
-          isMatch = true
           doneSrv = matchedBill.service_type
           doneCnt = 1
-          remark = 'OK：计划与账单匹配'
+          // 模拟dashboard状态逻辑（和你dashboard保持一致）
+          if(matchedBill.status === 'Done (Late)'){
+            statusTag = 'Done (Late)'
+            remark = 'OK：计划与账单匹配 - Done Late'
+          }else if(matchedBill.status === 'Done'){
+            statusTag = 'Done'
+            remark = 'OK：计划与账单匹配 - On Time'
+          }else if(matchedBill.status === 'Partial Done'){
+            statusTag = 'Partial Done'
+            remark = 'Partial Done'
+          }else{
+            statusTag = 'Not Start'
+            remark = 'Not Start'
+          }
+          isMatch = true
         } else {
           isMatch = false
+          statusTag = 'Not Start'
           remark = '🔴Missing bill：存在计划，未找到对应合同工单'
           doneSrv = null
           doneCnt = 0
+        }
+
+        // 分组统计
+        if(statusTag === 'Done' || statusTag === 'Done (Late)'){
+          groupDone +=1
+        }else{
+          groupPending +=1
         }
 
         output.push({
@@ -217,7 +248,8 @@ export default function DataValidationChecker() {
           planCount: planCnt,
           doneCount: doneCnt,
           isMatch,
-          remark
+          remark,
+          statusTag
         })
       })
     })
@@ -230,6 +262,7 @@ export default function DataValidationChecker() {
     })
 
     setCheckResults(output)
+    setStat({ totalPlan, groupDone, groupPending })
   }
 
   return (
@@ -269,6 +302,24 @@ export default function DataValidationChecker() {
         </button>
       </div>
 
+      {/* ========== 新增统计面板 ========== */}
+      {checkResults.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="border rounded p-4 bg-slate-50">
+            <div className="text-sm text-gray-500">Total Plan (Schedule)</div>
+            <div className="text-2xl font-bold mt-1">{stat.totalPlan}</div>
+          </div>
+          <div className="border rounded p-4 bg-green-50">
+            <div className="text-sm text-gray-600">✅ Done + Done (Late)</div>
+            <div className="text-2xl font-bold mt-1 text-green-700">{stat.groupDone}</div>
+          </div>
+          <div className="border rounded p-4 bg-amber-50">
+            <div className="text-sm text-gray-600">⏳ Not Start + Partial Done</div>
+            <div className="text-2xl font-bold mt-1 text-amber-700">{stat.groupPending}</div>
+          </div>
+        </div>
+      )}
+
       <div className="border rounded overflow-x-auto">
         <table className="min-w-full text-sm border-collapse">
           <thead className="bg-slate-700 text-white">
@@ -307,7 +358,7 @@ export default function DataValidationChecker() {
                   <td className="p-2 text-center">{row.planCount}</td>
                   <td className="p-2 text-center">{row.doneCount}</td>
                   <td className="p-2 text-center font-semibold">
-                    {row.isMatch ? '✅ Match' : '❌ Mismatch'}
+                    {row.statusTag ?? '-'}
                   </td>
                   <td className="p-2">{row.remark}</td>
                 </tr>
