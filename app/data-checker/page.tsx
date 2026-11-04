@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Workbook } from 'exceljs'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -37,99 +36,82 @@ type MaintenanceBillRow = {
   service_type: string | null
   status: string | null
   price: number | null
+  project: string | null
 }
 
 type CheckResult = {
   branchName: string
-  customer: string
-  monthNum: number
-  planServices: string[]
-  doneServices: string[]
+  companyName: string
+  month: string
+  planService: string | null
+  doneService: string | null
   planCount: number
   doneCount: number
   isMatch: boolean
   remark: string
 }
 
-const jobPriority: Record<string, number> = { GWM: 1, KPM: 2, KPS: 3, GTC: 4 }
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-function splitServiceTypes(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  return raw.split('&').map((s: string) => s.trim()).filter(Boolean)
-}
-
-function getContractJobType(contractNo: string | null | undefined): string | null {
+// 从 contract_no 截取服务类型 GWM/KPM/KPS/GTC
+function extractServiceFromContractNo(contractNo: string | null | undefined): string | null {
   if (!contractNo) return null
-  const parts = contractNo.split('-')
-  const type = parts.length > 1 ? parts[1].trim() : ''
-  if (['GWM', 'KPS', 'KPM', 'GTC'].includes(type)) return type
+  const parts = String(contractNo).split('-')
+  if(parts.length >=2) {
+    const t = parts[1].trim()
+    if(['GWM','KPM','KPS','GTC'].includes(t)) return t
+  }
   return null
 }
 
-const monthAbbrMap: Record<string, number> = {
-  Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
-  Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+// 解析 month_of_year "1,4,7,10" => [1,4,7,10]
+function parseMonthOfYear(val: string | null): number[] {
+  if(!val) return []
+  return val.split(',')
+    .map(s=>parseInt(s.trim(),10))
+    .filter(n=>!Number.isNaN(n) && n>=1 && n<=12)
 }
 
-type ParsedMonthItem = {
-  year: number;
-  month: number;
-}
-type ParseResult = {
-  list: ParsedMonthItem[];
-  isMultiMonth: boolean;
-  originalText: string;
+// 根据 frequency 获取默认执行月份
+function getFreqMonths(freq:string|null):number[]{
+  if(freq === 'monthly') return [1,2,3,4,5,6,7,8,9,10,11,12]
+  if(freq === 'quarterly') return [1,4,7,10]
+  if(freq === 'half_year') return [1,7]
+  return []
 }
 
-function parseBillMonth(monthStr: string | null): ParseResult {
-  if (!monthStr) return { list: [], isMultiMonth: false, originalText: '' }
-  const results: ParsedMonthItem[] = []
-  const parts = monthStr.split('&').map((s: string) => s.trim()).filter(Boolean)
-  const isMultiMonth = parts.length > 1
-  for (const s of parts) {
-    const dateSlashMatch = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-    if (dateSlashMatch) {
-      const m = parseInt(dateSlashMatch[2],10)
-      const y = parseInt(dateSlashMatch[3],10)
-      if (m >=1 && m <=12 && y >=2020) {
-        results.push({year:y, month:m})
-        continue
+// 解析 schedule_month_ref / month 字段，支持 & 多月份：May‑24 / 2024‑05
+function parseScheduleMonth(raw:string|null):Array<{y:number,m:number}>{
+  if(!raw) return []
+  const out:Array<{y:number,m:number}> = []
+  const items = raw.split('&').map(s=>s.trim()).filter(Boolean)
+  for(const it of items){
+    const dashMatch = it.match(/^([A-Za-z]{3})-(\d{2})$/)
+    if(dashMatch){
+      const mIdx = MONTH_SHORT.findIndex(x=>x.toLowerCase() === dashMatch[1].toLowerCase())
+      if(mIdx !== -1){
+        out.push({y:2000+Number(dashMatch[2]), m: mIdx+1})
       }
+      continue
     }
-    const isoMatch = s.match(/^(\d{4})-(\d{1,2})$/)
-    if (isoMatch) {
-      const y = parseInt(isoMatch[1], 10)
-      const m = parseInt(isoMatch[2], 10)
-      if (m >= 1 && m <= 12 && y >= 2020) {
-        results.push({ year: y, month: m })
-        continue
-      }
-    }
-    const mAbbr = s.match(/^([A-Za-z]{3})-(\d{2})$/)
-    if (mAbbr) {
-      const month = monthAbbrMap[mAbbr[1]]
-      if (!month) continue
-      const yy = parseInt(mAbbr[2], 10)
-      const fullYear = 2000 + yy
-      if (fullYear >= 2020) {
-        results.push({ year: fullYear, month })
-      }
+    const isoMatch = it.match(/^(\d{4})-(\d{1,2})$/)
+    if(isoMatch){
+      out.push({y:Number(isoMatch[1]), m:Number(isoMatch[2])})
     }
   }
-  return { list: results, isMultiMonth, originalText: monthStr.trim() }
+  return out
 }
 
 export default function DataValidationChecker() {
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [runLoading, setRunLoading] = useState(false)
   const [year, setYear] = useState(2026)
-  const [customerFilter, setCustomerFilter] = useState<'all' | 'CBTL' | "Nando's">('all')
   const [checkResults, setCheckResults] = useState<CheckResult[]>([])
-  const [filterMode, setFilterMode] = useState<'all' | 'error'>('all')
 
+  // ========== Boss权限校验 ==========
   useEffect(() => {
+    // TODO: 后续替换成真实登录角色读取，现在模拟boss
     const userRole = 'boss'
     setRole(userRole)
     if (userRole !== 'boss') {
@@ -138,193 +120,136 @@ export default function DataValidationChecker() {
     setLoading(false)
   }, [router])
 
-  const filteredResult = useMemo(() => {
-    let list = checkResults
-    if (customerFilter !== 'all') {
-      list = list.filter(r => r.customer === customerFilter)
-    }
-    if (filterMode === 'error') {
-      list = list.filter(r => !r.isMatch)
-    }
-    return list
-  }, [checkResults, filterMode, customerFilter])
+  if (loading) return <div className="p-6">Checking permission...</div>
+  if (role !== 'boss') return null
 
+  // ========== 执行交叉校验 ==========
   const runCheck = async () => {
-    setRunLoading(true)
     setCheckResults([])
-    try {
-      const { data: planRaw, error: planErr } = await supabase
-        .from('contract_branch')
-        .select('branch_name, company_name, contract_no, month_of_year, start_date, status')
-      if (planErr) throw planErr
+    // 1.读取活跃合同
+    const {data:contractsRaw, error:errC} = await supabase
+      .from('contract_branch')
+      .select('*')
+      .eq('status','active')
+    if(errC){
+      alert('读取contract_branch失败:'+errC.message)
+      return
+    }
+    const contracts = contractsRaw as ContractBranchRow[]
 
-      const { data: billRaw, error: billErr } = await supabase
-        .from('maintenance_bills')
-        .select('branch_name, company_name, month, schedule_month_ref, service_type, bill_date')
-      if (billErr) throw billErr
+    // 2.读取账单，【关键过滤：只取project包含CONTRACT，排除非合同工单】
+    const {data:billsRaw,error:errB} = await supabase.from('maintenance_bills').select('*')
+    if(errB){
+      alert('读取maintenance_bills失败:'+errB.message)
+      return
+    }
+    const billsAll = billsRaw as MaintenanceBillRow[]
+    const contractBills = billsAll.filter(b=>{
+      if(!b.project) return false
+      return b.project.toUpperCase().includes('CONTRACT')
+    })
 
-      const planFiltered = planRaw?.filter(item => {
-        if (!item.start_date || item.status !== 'active') return false
-        const rowYear = new Date(item.start_date).getFullYear()
-        return rowYear === year
-      }) ?? []
-
-      const billFiltered = billRaw?.filter(item => {
-        if (!item.bill_date) return false
-        const rowYear = new Date(item.bill_date).getFullYear()
-        return rowYear === year
-      }) ?? []
-
-      // plan map: key: branch|monthNum
-      const planMap = new Map<string, { services: string[], customer: string }>()
-      planFiltered.forEach(item => {
-        const b = item.branch_name?.trim()
-        const cName = item.company_name ?? ''
-        if (!b || !item.month_of_year) return
-        const service = getContractJobType(item.contract_no)
-        if (!service) return
-        // ✅ 修复这里的 x 和 n any 类型报错
-        const monthParts = item.month_of_year.split(',').map((x: string)=>parseInt(x.trim())).filter((n: number)=>!Number.isNaN(n) && n>=1 && n<=12)
-        for(const m of monthParts) {
-          const key = `${b}|${m}`
-          const entry = planMap.get(key)
-          if(entry) {
-            if(!entry.services.includes(service)) entry.services.push(service)
-          } else {
-            planMap.set(key, { services: [service], customer: cName })
-          }
+    // 构建账单映射 key: branchName|service|YYYY-MM
+    const billMap = new Map<string,MaintenanceBillRow>()
+    contractBills.forEach(bill=>{
+      if(!bill.branch_name || !bill.service_type) return
+      const bName = bill.branch_name.trim()
+      const sType = bill.service_type.trim()
+      const monthList = parseScheduleMonth(bill.schedule_month_ref ?? bill.month)
+      for(const sm of monthList){
+        const key = `${bName}|${sType}|${sm.y}-${String(sm.m).padStart(2,'0')}`
+        if(!billMap.has(key)){
+          billMap.set(key,bill)
         }
-      })
+      }
+    })
 
-      // bill map
-      const billMap = new Map<string, string[]>()
-      billFiltered.forEach(item => {
-        const b = item.branch_name?.trim()
-        if (!b) return
-        const refStr = item.schedule_month_ref ?? item.month
-        const parseRes = parseBillMonth(refStr)
-        const serviceList = splitServiceTypes(item.service_type)
-        for(const ym of parseRes.list) {
-          if(ym.year !== year) continue
-          const m = ym.month
-          const key = `${b}|${m}`
-          const exist = billMap.get(key) ?? []
-          serviceList.forEach((s: string)=>{
-            if(!exist.includes(s)) exist.push(s)
-          })
-          billMap.set(key, exist)
-        }
-      })
+    // 遍历合同生成【计划任务清单】
+    const output:CheckResult[] = []
+    contracts.forEach(ct=>{
+      if(!ct.branch_name) return
+      const brName = ct.branch_name.trim()
+      const srv = extractServiceFromContractNo(ct.contract_no)
+      if(!srv) return
 
-      const allKeys = new Set([...planMap.keys(), ...billMap.keys()])
-      const output: CheckResult[] = []
+      // 判断合同起止年份
+      const startY = ct.start_date ? Number(ct.start_date.split('-')[0]) : 2020
+      const endY = ct.end_date ? Number(ct.end_date.split('-')[0]) : 2030
+      if(year < startY || year> endY) return
 
-      for (const key of allKeys) {
-        const [branchName, monthStr] = key.split('|')
-        const monthNum = parseInt(monthStr)
-        const plan = planMap.get(key)
-        const doneServices = billMap.get(key) ?? []
-        const planServices = plan?.services ?? []
-        const customer = plan?.customer ?? ''
+      // 获取该合同需要执行的月份
+      let targetMonths:number[] = []
+      if(ct.month_of_year && ct.month_of_year.trim()){
+        targetMonths = parseMonthOfYear(ct.month_of_year)
+      }else{
+        targetMonths = getFreqMonths(ct.frequency)
+      }
 
-        let isMatch = true
-        let remark = 'OK'
-        const planSorted = [...planServices].sort((a,b)=>(jobPriority[a]??99)-(jobPriority[b]??99))
-        const doneSorted = [...doneServices].sort((a,b)=>(jobPriority[a]??99)-(jobPriority[b]??99))
+      // 循环每一个计划月份
+      targetMonths.forEach(m=>{
+        const ymKey = `${year}-${String(m).padStart(2,'0')}`
+        const lookupKey = `${brName}|${srv}|${ymKey}`
+        const matchedBill = billMap.get(lookupKey)
 
-        if (!plan && doneServices.length>0) {
+        let remark = ''
+        let isMatch = false
+        let doneSrv: string|null = null
+        let doneCnt = 0
+        const planCnt = 1
+
+        if(matchedBill){
+          isMatch = true
+          doneSrv = matchedBill.service_type
+          doneCnt =1
+          remark = 'OK：计划与账单匹配'
+        }else{
           isMatch = false
-          remark = 'Bill exists, no schedule plan'
-        } else if (plan && doneServices.length === 0) {
-          isMatch = false
-          remark = 'Schedule plan exists, no bill'
-        } else if (JSON.stringify(planSorted) !== JSON.stringify(doneSorted)) {
-          isMatch = false
-          remark = `Service mismatch. Plan: ${planSorted.join(',')}, Done: ${doneSorted.join(',')}`
+          remark = '🔴Missing bill：存在计划，未找到对应合同工单'
+          doneSrv = null
+          doneCnt =0
         }
 
         output.push({
-          branchName,
-          customer,
-          monthNum,
-          planServices: planSorted,
-          doneServices: doneSorted,
-          planCount: planServices.length,
-          doneCount: doneServices.length,
+          branchName: brName,
+          companyName: ct.company_name ?? '-',
+          month: `${MONTH_SHORT[m-1]} ${year}`,
+          planService: srv,
+          doneService: doneSrv,
+          planCount: planCnt,
+          doneCount: doneCnt,
           isMatch,
           remark
         })
-      }
-
-      output.sort((a, b) => a.branchName.localeCompare(b.branchName))
-      setCheckResults(output)
-    } catch (err) {
-      console.error('Validation Error:', err)
-      alert('Query failed, check browser console log')
-    } finally {
-      setRunLoading(false)
-    }
-  }
-
-  const exportExcel = async () => {
-    if (filteredResult.length === 0) return
-    const wb = new Workbook()
-    const ws = wb.addWorksheet('Validation Result')
-    ws.columns = [
-      { header: 'Outlet / Branch', key: 'branchName', width: 22 },
-      { header: 'Customer', key: 'customer', width: 16 },
-      { header: 'Month', key: 'monthNum', width: 8 },
-      { header: 'Plan Service', key: 'planService', width: 18 },
-      { header: 'Done Service', key: 'doneService', width: 18 },
-      { header: 'Plan Qty', key: 'planCount', width: 10 },
-      { header: 'Done Qty', key: 'doneCount', width: 10 },
-      { header: 'Status', key: 'status', width: 12 },
-      { header: 'Remark', key: 'remark', width: 30 },
-    ]
-    filteredResult.forEach(row => {
-      ws.addRow({
-        branchName: row.branchName,
-        customer: row.customer,
-        monthNum: row.monthNum,
-        planService: row.planServices.join(' & '),
-        doneService: row.doneServices.join(' & '),
-        planCount: row.planCount,
-        doneCount: row.doneCount,
-        status: row.isMatch ? '✅ Match' : '❌ Mismatch',
-        remark: row.remark
       })
     })
-    const buf = await wb.xlsx.writeBuffer()
-    const blob = new Blob([buf], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Validation_Check_${year}.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
 
-  if (loading) return <div className="p-6">Checking permission...</div>
-  if (role !== 'boss') return null
+    output.sort((a,b)=>{
+      if(a.branchName.localeCompare(b.branchName)!==0) return a.branchName.localeCompare(b.branchName)
+      return a.month.localeCompare(b.month)
+    })
+    setCheckResults(output)
+  }
 
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold">Data Validation Checker</h1>
-          <p className="text-gray-500 text-sm">Cross check data between Monthly Schedule / Annual Table / Customer Schedule Report</p>
+          <p className="text-gray-500 text-sm">
+            Cross‑check contract plan vs maintenance bills【Only project containing CONTRACT】
+          </p>
         </div>
         <button
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.back()}
           className="px-4 py-2 border rounded hover:bg-gray-100"
         >
-          ← Back to Dashboard
+          ← Back
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center mb-6">
-        <div className="flex items-center gap-2">
-          <span>Year:</span>
+      <div className="flex gap-3 items-center mb-6">
+        <div>
+          <span className="mr-2">Year:</span>
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
@@ -334,55 +259,20 @@ export default function DataValidationChecker() {
             <option value={2027}>2027</option>
           </select>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span>Customer:</span>
-          <select
-            value={customerFilter}
-            onChange={(e) => setCustomerFilter(e.target.value as any)}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="all">All</option>
-            <option value="CBTL">CBTL</option>
-            <option value="Nando's">Nando's</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span>Filter:</span>
-          <select
-            value={filterMode}
-            onChange={(e) => setFilterMode(e.target.value as 'all' | 'error')}
-            className="border px-2 py-1 rounded"
-          >
-            <option value="all">All Record</option>
-            <option value="error">Only Mismatch</option>
-          </select>
-        </div>
-
         <button
           onClick={runCheck}
-          disabled={runLoading}
-          className="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 disabled:opacity-60"
+          className="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700"
         >
-          {runLoading ? 'Checking...' : 'Run Validation Check'}
-        </button>
-
-        <button
-          onClick={exportExcel}
-          disabled={filteredResult.length === 0}
-          className="border border-red-600 text-red-600 px-4 py-2 rounded hover:bg-red-50 disabled:opacity-40"
-        >
-          Export Result
+          Run Validation Check
         </button>
       </div>
 
       <div className="border rounded overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm border-collapse">
           <thead className="bg-slate-700 text-white">
             <tr>
               <th className="p-2 text-left">Outlet / Branch</th>
-              <th className="p-2 text-left">Customer</th>
+              <th className="p-2 text-left">Company</th>
               <th className="p-2 text-center">Month</th>
               <th className="p-2 text-center">Plan Service</th>
               <th className="p-2 text-center">Done Service</th>
@@ -390,31 +280,35 @@ export default function DataValidationChecker() {
               <th className="p-2 text-center">Done Qty</th>
               <th className="p-2 text-center">Status</th>
               <th className="p-2 text-left">Remark</th>
+              {/* ✅ 最右侧增加No.序号 */}
+              <th className="p-2 text-center w-12">No.</th>
             </tr>
           </thead>
           <tbody>
-            {filteredResult.length === 0 ? (
+            {checkResults.length === 0 ? (
               <tr>
-                <td colSpan={9} className="p-4 text-center text-gray-500">
-                  {checkResults.length === 0
-                    ? 'Click [Run Validation Check] to start cross checking'
-                    : 'No mismatch found ✅'}
+                <td colSpan={10} className="p-4 text-center text-gray-500">
+                  Click [Run Validation Check] to start cross checking
                 </td>
               </tr>
             ) : (
-              filteredResult.map((row, idx) => (
-                <tr key={idx} className={row.isMatch ? 'bg-green-50' : 'bg-red-50'}>
+              checkResults.map((row, idx) => (
+                <tr
+                  key={idx}
+                  className={row.isMatch ? 'bg-green-50' : 'bg-red-50'}
+                >
                   <td className="p-2">{row.branchName}</td>
-                  <td className="p-2">{row.customer}</td>
-                  <td className="p-2 text-center">{row.monthNum}</td>
-                  <td className="p-2 text-center">{row.planServices.join(' & ') || '-'}</td>
-                  <td className="p-2 text-center">{row.doneServices.join(' & ') || '-'}</td>
+                  <td className="p-2">{row.companyName}</td>
+                  <td className="p-2 text-center">{row.month}</td>
+                  <td className="p-2 text-center">{row.planService ?? '-'}</td>
+                  <td className="p-2 text-center">{row.doneService ?? '-'}</td>
                   <td className="p-2 text-center">{row.planCount}</td>
                   <td className="p-2 text-center">{row.doneCount}</td>
                   <td className="p-2 text-center font-semibold">
                     {row.isMatch ? '✅ Match' : '❌ Mismatch'}
                   </td>
                   <td className="p-2">{row.remark}</td>
+                  <td className="p-2 text-center text-gray-500">{idx+1}</td>
                 </tr>
               ))
             )}
