@@ -8,15 +8,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type MonthlyScheduleRow = {
+type ContractBranchRow = {
   id: bigint
+  contract_no: string | null
   branch_name: string | null
   company_name: string | null
-  plan_service: string | null
-  done_service: string | null
-  month: number | null
-  year: number | null
+  frequency: string | null
+  start_date: string | null
+  end_date: string | null
   status: string | null
+  month_of_year: string | null
+  times_per_year: string | null
+  schedule_rule: string | null
+  project: string | null
 }
 
 type CheckResult = {
@@ -24,7 +28,6 @@ type CheckResult = {
   companyName: string
   month: string
   planService: string | null
-  doneService: string | null
   statusTag: string | null
   remark: string
 }
@@ -61,18 +64,17 @@ export default function DataValidationChecker() {
     setCheckResults([])
     setStat({ totalPlan:0, groupDone:0, groupPending:0 })
 
-    // 直接读取 monthly_schedule，和 Dashboard 同一个表！
+    // 用你原本 Dashboard 在用的表 contract_branch
     const { data: scheduleRaw, error: err } = await supabase
-      .from('monthly_schedule')
+      .from('contract_branch')
       .select('*')
-      .eq('year', year)
 
     if (err) {
-      alert('读取 monthly_schedule 失败: ' + err.message)
+      alert('读取 contract_branch 失败: ' + err.message)
       return
     }
 
-    const scheduleList = scheduleRaw as MonthlyScheduleRow[]
+    const scheduleList = scheduleRaw as ContractBranchRow[]
     const output: CheckResult[] = []
     let totalPlan = 0
     let groupDone = 0
@@ -83,7 +85,7 @@ export default function DataValidationChecker() {
       totalPlan +=1
       const st = row.status ?? 'Not Start'
 
-      // 分组规则 和 Dashboard 保持一致
+      // 和 Dashboard 一样分组
       if(st === 'Done' || st === 'Done (Late)'){
         groupDone +=1
       }else{
@@ -93,9 +95,8 @@ export default function DataValidationChecker() {
       output.push({
         branchName: row.branch_name,
         companyName: row.company_name ?? '-',
-        month: row.month ? `${MONTH_SHORT[row.month -1]} ${year}` : '-',
-        planService: row.plan_service,
-        doneService: row.done_service,
+        month: row.month_of_year ? row.month_of_year : '-',
+        planService: row.frequency,
         statusTag: st,
         remark: st
       })
@@ -113,7 +114,7 @@ export default function DataValidationChecker() {
         <div>
           <h1 className="text-xl font-bold">Data Validation Checker</h1>
           <p className="text-gray-500 text-sm">
-            Monthly Schedule Status Counter (Same source as Dashboard)
+            Contract Branch Status Counter (Same source as Dashboard)
           </p>
         </div>
         <button
@@ -170,8 +171,7 @@ export default function DataValidationChecker() {
               <th className="p-2 text-left">Outlet / Branch</th>
               <th className="p-2 text-left">Company</th>
               <th className="p-2 text-center">Month</th>
-              <th className="p-2 text-center">Plan Service</th>
-              <th className="p-2 text-center">Done Service</th>
+              <th className="p-2 text-center">Frequency</th>
               <th className="p-2 text-center">Status</th>
               <th className="p-2 text-left">Remark</th>
             </tr>
@@ -179,8 +179,8 @@ export default function DataValidationChecker() {
           <tbody>
             {checkResults.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-4 text-center text-gray-500">
-                  Click [Run Validation Check] to load monthly schedule data
+                <td colSpan={7} className="p-4 text-center text-gray-500">
+                  Click [Run Validation Check] to load contract branch data
                 </td>
               </tr>
             ) : (
@@ -198,7 +198,6 @@ export default function DataValidationChecker() {
                   <td className="p-2">{row.companyName}</td>
                   <td className="p-2 text-center">{row.month}</td>
                   <td className="p-2 text-center">{row.planService ?? '-'}</td>
-                  <td className="p-2 text-center">{row.doneService ?? '-'}</td>
                   <td className="p-2 text-center font-semibold">
                     {row.statusTag ?? '-'}
                   </td>
