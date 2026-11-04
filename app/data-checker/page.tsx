@@ -36,7 +36,6 @@ const MONTHS = [
   { num:10, label:'Oct'},{ num:11, label:'Nov'},{ num:12, label:'Dec'},
 ]
 
-// 完全复制 DashboardStateWrapper 的原版判断函数，保证算法同源
 function isWorkInMonth(
   freq: string | null,
   targetYear: number,
@@ -100,7 +99,6 @@ export default function DataValidationChecker() {
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
-  // 模拟 Dashboard 输出当月的所有 Plan Schedule 行
   const dashboardPlanRows: DashboardPlanRow[] = useMemo(()=>{
     if(!loaded || contractList.length ===0) return []
     const result:DashboardPlanRow[] = []
@@ -128,7 +126,6 @@ export default function DataValidationChecker() {
     return result
   },[contractList, loaded, year, selectedMonth])
 
-  // 统计
   const stat = useMemo(()=>{
     const total = dashboardPlanRows.length
     const gwm = dashboardPlanRows.filter(r=>r.serviceType === 'GWM').length
@@ -161,34 +158,34 @@ export default function DataValidationChecker() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-xl font-bold">Data Validation Checker · Verify Dashboard Plan Count</h1>
-          <p className="text-sm text-gray‑500">
+          <p className="text-sm text-gray-500">
             【复刻Dashboard Monthly Schedule计算逻辑】同一页面直接输出该年月全部Plan明细，无需切换Dashboard页面核对数量
           </p>
         </div>
-        <button onClick={()=>router.back()} className="px‑4 py‑2 border rounded hover:bg‑gray‑100">
+        <button onClick={()=>router.back()} className="px-4 py-2 border rounded hover:bg-gray-100">
           ← Back
         </button>
       </div>
 
-      <div className="flex flex-wrap gap‑3 items‑center mb‑6">
-        <div className="flex items‑center gap‑2">
+      <div className="flex flex-wrap gap-3 items-center mb-6">
+        <div className="flex items-center gap-2">
           <span>Year:</span>
-          <select value={year} onChange={e=>setYear(Number(e.target.value))} className="border px‑2 py‑1 rounded">
+          <select value={year} onChange={e=>setYear(Number(e.target.value))} className="border px-2 py-1 rounded">
             <option value={2026}>2026</option>
             <option value={2027}>2027</option>
             <option value={2028}>2028</option>
           </select>
         </div>
-        <div className="flex items‑center gap‑2">
+        <div className="flex items-center gap-2">
           <span>Month:</span>
-          <select value={selectedMonth} onChange={e=>setSelectedMonth(Number(e.target.value))} className="border px‑2 py‑1 rounded">
+          <select value={selectedMonth} onChange={e=>setSelectedMonth(Number(e.target.value))} className="border px-2 py-1 rounded">
             {MONTHS.map(m=><option key={m.num} value={m.num}>{m.label}</option>)}
           </select>
         </div>
         <button
           onClick={load}
           disabled={loading}
-          className="bg‑red‑600 text‑white px‑5 py‑2 rounded hover:bg‑red‑700 disabled:opacity‑50"
+          className="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 disabled:opacity-50"
         >
           {loading ? 'Loading...' : 'Load & Calculate Plan Schedule'}
         </button>
@@ -196,58 +193,57 @@ export default function DataValidationChecker() {
 
       {loaded && (
         <>
-          {/* 统计卡片，和Dashboard右上角数字对比 */}
-          <div className="grid grid‑cols‑2 md:grid‑cols‑5 gap‑3 mb‑6">
-            <div className="border rounded p‑4 bg‑slate‑50">
-              <div className="text‑xs text‑gray‑500">{monthLabel} {year} — Total Plan Rows</div>
-              <div className="text‑2xl font‑bold">{stat.total}</div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            <div className="border rounded p-4 bg-slate-50">
+              <div className="text-xs text-gray-500">{monthLabel} {year} — Total Plan Rows</div>
+              <div className="text-2xl font-bold">{stat.total}</div>
             </div>
-            <div className="border rounded p‑4 bg‑sky‑50">
-              <div className="text‑xs text‑sky‑600">GWM</div>
-              <div className="text‑2xl font‑bold text‑sky‑700">{stat.gwm}</div>
+            <div className="border rounded p-4 bg-sky-50">
+              <div className="text-xs text-sky-600">GWM</div>
+              <div className="text-2xl font-bold text-sky-700">{stat.gwm}</div>
             </div>
-            <div className="border rounded p‑4 bg‑violet‑50">
-              <div className="text‑xs text‑violet‑600">KPM</div>
-              <div className="text‑2xl font‑bold text‑violet‑700">{stat.kpm}</div>
+            <div className="border rounded p-4 bg-violet-50">
+              <div className="text-xs text-violet-600">KPM</div>
+              <div className="text-2xl font-bold text-violet-700">{stat.kpm}</div>
             </div>
-            <div className="border rounded p‑4 bg‑emerald‑50">
-              <div className="text‑xs text‑emerald‑600">KPS</div>
-              <div className="text‑2xl font‑bold text‑emerald‑700">{stat.kps}</div>
+            <div className="border rounded p-4 bg-emerald-50">
+              <div className="text-xs text-emerald-600">KPS</div>
+              <div className="text-2xl font-bold text-emerald-700">{stat.kps}</div>
             </div>
-            <div className="border rounded p‑4 bg‑amber‑50">
-              <div className="text‑xs text‑amber‑600">GTC</div>
-              <div className="text‑2xl font‑bold text‑amber‑700">{stat.gtc}</div>
+            <div className="border rounded p-4 bg-amber-50">
+              <div className="text-xs text-amber-600">GTC</div>
+              <div className="text-2xl font-bold text-amber-700">{stat.gtc}</div>
             </div>
           </div>
 
-          <div className="text‑sm text‑gray‑500 mb‑3">
+          <div className="text-sm text-gray-500 mb-3">
             💡校验方法：打开Dashboard，选择完全相同的【{monthLabel} {year}】，看表格总行数，和上面Total Plan Rows对比。数字不一样，说明Dashboard逻辑有bug。下面列表是本页面计算出来全部Plan明细。
           </div>
 
-          <div className="border rounded overflow‑x‑auto">
-            <table className="min‑w‑full text‑sm border‑collapse">
-              <thead className="bg‑slate‑700 text‑white">
+          <div className="border rounded overflow-x-auto">
+            <table className="min-w-full text-sm border-collapse">
+              <thead className="bg-slate-700 text-white">
                 <tr>
-                  <th className="p‑2 text‑center w‑12">No.</th>
-                  <th className="p‑2 text‑left">Branch Name</th>
-                  <th className="p‑2 text‑left">Company</th>
-                  <th className="p‑2 text‑center">Service</th>
+                  <th className="p-2 text-center w-12">No.</th>
+                  <th className="p-2 text-left">Branch Name</th>
+                  <th className="p-2 text-left">Company</th>
+                  <th className="p-2 text-center">Service</th>
                 </tr>
               </thead>
               <tbody>
                 {dashboardPlanRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p‑6 text‑center text‑gray‑400">
+                    <td colSpan={4} className="p-6 text-center text-gray-400">
                       No Plan Schedule for {monthLabel} {year}
                     </td>
                   </tr>
                 ):(
                   dashboardPlanRows.map((row,idx)=>(
-                    <tr key={row.id} className={idx%2===0?'bg‑white':'bg‑gray‑50'}>
-                      <td className="p‑2 text‑center text‑gray‑500">{idx+1}</td>
-                      <td className="p‑2">{row.branchName}</td>
-                      <td className="p‑2">{row.companyName}</td>
-                      <td className="p‑2 text‑center font‑semibold">{row.serviceType}</td>
+                    <tr key={row.id} className={idx%2===0?'bg-white':'bg-gray-50'}>
+                      <td className="p-2 text-center text-gray-500">{idx+1}</td>
+                      <td className="p-2">{row.branchName}</td>
+                      <td className="p-2">{row.companyName}</td>
+                      <td className="p-2 text-center font-semibold">{row.serviceType}</td>
                     </tr>
                   ))
                 )}
