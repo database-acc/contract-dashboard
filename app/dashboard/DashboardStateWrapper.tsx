@@ -107,7 +107,7 @@ function parseBillMonth(monthStr: string | null): ParseResult {
     if (isoMatch) {
       const y = parseInt(isoMatch[1], 10)
       const m = parseInt(isoMatch[2], 10)
-      if (m >= 1 && m <= 12 && y >= 2020) {
+      if (m >= 1 && m <= 12 && y >=2020) {
         results.push({ year: y, month: m })
         continue
       }
@@ -510,6 +510,17 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
           </select>
         </div>
 
+        {/* ✅ Year 移动至 Service 之后、月份按钮之前 */}
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 shrink-0"
+        >
+          <option value={2026}>2026</option>
+          <option value={2027}>2027</option>
+          <option value={2028}>2028</option>
+        </select>
+
         <div className="flex gap-0.5 shrink-0">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
             <button
@@ -535,16 +546,6 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             placeholder="Search branch / customer"
             className="border border-gray-300 rounded px-1.5 py-0.5 text-sm min-w-24 max-w-32 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
           />
-
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-          >
-            <option value={2026}>2026</option>
-            <option value={2027}>2027</option>
-            <option value={2028}>2028</option>
-          </select>
 
           <button
             type="button"
