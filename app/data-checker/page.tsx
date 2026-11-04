@@ -60,7 +60,6 @@ export default function DataValidationChecker() {
   const [stat, setStat] = useState<StatSummary>({ totalPlan:0, groupDone:0, groupPending:0 })
 
   useEffect(() => {
-    // 权限校验 boss only
     const userRole = 'boss'
     setRole(userRole)
     if (userRole !== 'boss') {
@@ -76,49 +75,44 @@ export default function DataValidationChecker() {
     setItems([])
     setStat({ totalPlan:0, groupDone:0, groupPending:0 })
 
-    // 1. 拿 contract_branch
-    const { data: branches, error: errBr } = await supabase
+    const { data: rawBranches, error: errBr } = await supabase
       .from('contract_branch')
       .select('*')
     if (errBr) {
       alert('读取 contract_branch 失败：' + errBr.message)
       return
     }
+    const branches: ContractBranchRow[] = rawBranches as ContractBranchRow[]
 
-    // 2. 拿 bills
-    const { data: bills, error: errBill } = await supabase
+    const { data: rawBills, error: errBill } = await supabase
       .from('maintenance_bills')
       .select('*')
     if (errBill) {
       alert('读取 maintenance_bills 失败：' + errBill.message)
       return
     }
+    const billList: MaintenanceBillRow[] = rawBills as MaintenanceBillRow[]
 
-    const billList = bills as MaintenanceBillRow[]
     const resultList: ScheduleItem[] = []
 
-    // 重现 Dashboard 展开逻辑
-    (branches as ContractBranchRow[]).forEach(br => {
+    branches.forEach((br: ContractBranchRow) => {
       if (!br.branch_name || !br.start_date || !br.end_date) return
       const start = new Date(br.start_date)
       const end = new Date(br.end_date)
 
-      // 遍历这个合同有效期内的每一个月
       let cursor = new Date(start.getFullYear(), start.getMonth(), 1)
       while (cursor <= end) {
         const y = cursor.getFullYear()
         const m = cursor.getMonth() + 1
 
-        // 只保留选择的年份
         if (y === year) {
           const refKey = `${br.branch_name}-${y}-${String(m).padStart(2,'0')}`
           const matchedBill = billList.find(b => b.schedule_month_ref === refKey)
 
           let status: ScheduleItem['status']
           if (matchedBill) {
-            // 有工单，判断是否准时
             const billDate = new Date(matchedBill.bill_date!)
-            const dueDate = new Date(y, m, 15) // 和你dashboard同样的判断基准
+            const dueDate = new Date(y, m, 15)
             status = billDate <= dueDate ? 'On Time' : 'Done (Late)'
           } else {
             status = 'Not Start'
@@ -134,15 +128,13 @@ export default function DataValidationChecker() {
             status
           })
         }
-        // next month
         cursor.setMonth(cursor.getMonth() + 1)
       }
     })
 
-    // 统计
-    let totalPlan = resultList.length
-    let groupDone = resultList.filter(i => i.status === 'On Time' || i.status === 'Done (Late)').length
-    let groupPending = resultList.filter(i => i.status === 'Not Start' || i.status === 'Partial Done').length
+    const totalPlan = resultList.length
+    const groupDone = resultList.filter(i => i.status === 'On Time' || i.status === 'Done (Late)').length
+    const groupPending = resultList.filter(i => i.status === 'Not Start' || i.status === 'Partial Done').length
 
     setItems(resultList)
     setStat({ totalPlan, groupDone, groupPending })
