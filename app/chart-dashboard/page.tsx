@@ -31,6 +31,10 @@ const SERVICE_COLOR_MAP: Record<string, string> = {
 const DEFAULT_COLOR = '#6b7280'
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTH_MAP: Record<string, number> = {
+  Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5,
+  Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11
+}
 
 type ServicePieItem = {
   name: string
@@ -50,8 +54,11 @@ type ChartRow = {
   project: string | null
 }
 
-// 解析年月，优先 schedule_month_ref (yyyy-mm)，为空则用 month 字段
+// 重点：兼容两种格式
+// 1. schedule_month_ref: yyyy-mm
+// 2. month: May-24 / Jan-26
 function parseYearMonth(row: ChartRow): { year: number | null; monthIndex: number | null } {
+  // 优先 schedule_month_ref
   if (row.schedule_month_ref) {
     const [yStr, mStr] = row.schedule_month_ref.split('-')
     const y = Number(yStr)
@@ -60,18 +67,26 @@ function parseYearMonth(row: ChartRow): { year: number | null; monthIndex: numbe
       return { year: y, monthIndex: m }
     }
   }
+  // 解析 May-24 这种 MMM-YY
   if (row.month) {
-    const d = new Date(row.month)
-    if (!isNaN(d.getTime())) {
-      return { year: d.getFullYear(), monthIndex: d.getMonth() }
+    const parts = row.month.trim().split('-')
+    if (parts.length === 2) {
+      const mStr = parts[0]
+      const yyStr = parts[1]
+      const mIdx = MONTH_MAP[mStr]
+      if (mIdx !== undefined) {
+        let yy = Number(yyStr)
+        // 24 → 2024，26 → 2026
+        const fullYear = yy + 2000
+        return { year: fullYear, monthIndex: mIdx }
+      }
     }
   }
   return { year: null, monthIndex: null }
 }
 
-// 新版分类规则
+// 分类规则，description 不区分大小写
 function getFinalServiceType(row: ChartRow): string {
-  // 有 service_type 直接优先使用
   if (row.service_type) {
     return row.service_type
   }
@@ -79,16 +94,12 @@ function getFinalServiceType(row: ChartRow): string {
   const descLower = desc.toLowerCase()
 
   if (descLower === 'plumbing works' || descLower === 'plumbing work') {
-    // plumbing works / work 这里你说可以是 KPS / KPM
-    // 👉 这里有个关键点：没有其他字段判断区分KPS还是KPM，我先标记Unknown；
-    // 如果你后续有规则区分这两个，我们再改
     return 'Unknown'
   }
-
-  if (desc === 'KITCHEN PIPELINE SERVICE') return 'KPS'
-  if (desc === 'GREASE WASTE MANAGEMENT') return 'GWM'
-  if (desc === 'GREASE TRAP CLEARANCE') return 'GTC'
-  if (desc === 'KITCHEN PIPELINE MANAGEMENT') return 'KPM'
+  if (descLower === 'kitchen pipeline service') return 'KPS'
+  if (descLower === 'grease waste management') return 'GWM'
+  if (descLower === 'grease trap clearance') return 'GTC'
+  if (descLower === 'kitchen pipeline management') return 'KPM'
 
   return 'Unknown'
 }
@@ -121,18 +132,18 @@ export default function ChartDashboard() {
         Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0,
       }
 
-      data.forEach((row: ChartRow) => {
-        // 过滤 project 包含 contract
+      data.forEach((row: ChartRow, idx) => {
         const projectText = row.project ?? ''
-        if (!projectText.toLowerCase().includes('contract')) return
-
+        const projectOk = projectText.toLowerCase().includes('contract')
         const { year: rowYear, monthIndex } = parseYearMonth(row)
+        const serviceLabel = getFinalServiceType(row)
+        console.log(`Row ${idx}: projectOk=${projectOk}, parseYear=${rowYear}, monthIdx=${monthIndex}, service=${serviceLabel}, row=`, row)
+
+        if (!projectOk) return
         if (rowYear === null || monthIndex === null) return
         if (rowYear !== year) return
 
-        const sType = getFinalServiceType(row)
-        serviceMap[sType] = (serviceMap[sType] || 0) + 1
-
+        serviceMap[serviceLabel] = (serviceMap[serviceLabel] || 0) + 1
         const mName = MONTH_SHORT[monthIndex]
         monthMap[mName] += 1
       })
@@ -182,33 +193,37 @@ export default function ChartDashboard() {
           <div className="border rounded-lg p-5 bg-white shadow-sm mb-6">
             <p className="text-gray-500 text-sm">Total Maintenance Jobs ({year})</p>
             <p className="text-4xl font-bold text-slate-800 mt-1">{totalJobs}</p>
-            {totalJobs <= 1 && (
-              <p className="text-orange-500 text-sm mt-2">⚠️ Only limited records found for this year, please check your maintenance_bills table.</p>
+            {totalJobs === 0 && (
+              <p className="text-orange-500 text-sm mt-2">⚠️ No matching records found for this year. Check project / schedule_month_ref format.</p>
             )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="border rounded-lg p-4 bg-white shadow-sm">
               <h2 className="font-semibold mb-4">Service Type Distribution</h2>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={servicePieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={110}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {servicePieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {servicePieData.length === 0 ? (
+                <div className="h-[320px] flex items-center justify-center text-gray-400">No matching records</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <PieChart>
+                    <Pie
+                      data={servicePieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={110}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {servicePieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             <div className="border rounded-lg p-4 bg-white shadow-sm">
