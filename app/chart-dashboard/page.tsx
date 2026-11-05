@@ -11,6 +11,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend
 } from 'recharts'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
@@ -43,7 +44,53 @@ type MonthBarItem = {
 
 type ChartRow = {
   service_type: string | null
-  bill_date: string | null
+  schedule_month_ref: string | null
+  month: string | null
+  description: string | null
+  project: string | null
+}
+
+// 解析年月，优先 schedule_month_ref (yyyy-mm)，为空则用 month 字段
+function parseYearMonth(row: ChartRow): { year: number | null; monthIndex: number | null } {
+  if (row.schedule_month_ref) {
+    const [yStr, mStr] = row.schedule_month_ref.split('-')
+    const y = Number(yStr)
+    const m = Number(mStr) - 1
+    if (!isNaN(y) && !isNaN(m) && m >=0 && m <=11) {
+      return { year: y, monthIndex: m }
+    }
+  }
+  if (row.month) {
+    const d = new Date(row.month)
+    if (!isNaN(d.getTime())) {
+      return { year: d.getFullYear(), monthIndex: d.getMonth() }
+    }
+  }
+  return { year: null, monthIndex: null }
+}
+
+// 新版分类规则
+function getFinalServiceType(row: ChartRow): string {
+  // 有 service_type 直接优先使用
+  if (row.service_type) {
+    return row.service_type
+  }
+  const desc = row.description?.trim() ?? ''
+  const descLower = desc.toLowerCase()
+
+  if (descLower === 'plumbing works' || descLower === 'plumbing work') {
+    // plumbing works / work 这里你说可以是 KPS / KPM
+    // 👉 这里有个关键点：没有其他字段判断区分KPS还是KPM，我先标记Unknown；
+    // 如果你后续有规则区分这两个，我们再改
+    return 'Unknown'
+  }
+
+  if (desc === 'KITCHEN PIPELINE SERVICE') return 'KPS'
+  if (desc === 'GREASE WASTE MANAGEMENT') return 'GWM'
+  if (desc === 'GREASE TRAP CLEARANCE') return 'GTC'
+  if (desc === 'KITCHEN PIPELINE MANAGEMENT') return 'KPM'
+
+  return 'Unknown'
 }
 
 export default function ChartDashboard() {
@@ -59,14 +106,14 @@ export default function ChartDashboard() {
       setLoading(true)
       const { data, error } = await supabase
         .from('maintenance_bills')
-        .select('service_type, bill_date')
+        .select('service_type, schedule_month_ref, month, description, project')
 
       if (error) {
         console.error('supabase error:', error)
         setLoading(false)
         return
       }
-      console.log('raw bills data:', data)
+      console.log('raw bills data all:', data)
 
       const serviceMap: Record<string, number> = {}
       const monthMap: Record<string, number> = {
@@ -75,16 +122,18 @@ export default function ChartDashboard() {
       }
 
       data.forEach((row: ChartRow) => {
-        if (!row.bill_date) return
-        const d = new Date(row.bill_date)
-        const rowYear = d.getFullYear()
-        if(rowYear !== year) return
+        // 过滤 project 包含 contract
+        const projectText = row.project ?? ''
+        if (!projectText.toLowerCase().includes('contract')) return
 
-        const s = row.service_type || 'Unknown'
-        serviceMap[s] = (serviceMap[s] || 0) + 1
+        const { year: rowYear, monthIndex } = parseYearMonth(row)
+        if (rowYear === null || monthIndex === null) return
+        if (rowYear !== year) return
 
-        const mIndex = d.getMonth()
-        const mName = MONTH_SHORT[mIndex]
+        const sType = getFinalServiceType(row)
+        serviceMap[sType] = (serviceMap[sType] || 0) + 1
+
+        const mName = MONTH_SHORT[monthIndex]
         monthMap[mName] += 1
       })
 
@@ -92,8 +141,7 @@ export default function ChartDashboard() {
       const barArr: MonthBarItem[] = Object.entries(monthMap).map(([name, count]) => ({ name, count }))
       const total = pieArr.reduce((sum, item) => sum + item.value, 0)
 
-      console.log('pie data', pieArr)
-      console.log('bar data', barArr)
+      console.log('filtered pie data for ' + year, pieArr)
       setServicePieData(pieArr)
       setMonthBarData(barArr)
       setTotalJobs(total)
@@ -131,10 +179,12 @@ export default function ChartDashboard() {
         <div className="py-20 text-center">Loading chart data...</div>
       ) : (
         <>
-          {/* 总工单卡片 */}
           <div className="border rounded-lg p-5 bg-white shadow-sm mb-6">
             <p className="text-gray-500 text-sm">Total Maintenance Jobs ({year})</p>
             <p className="text-4xl font-bold text-slate-800 mt-1">{totalJobs}</p>
+            {totalJobs <= 1 && (
+              <p className="text-orange-500 text-sm mt-2">⚠️ Only limited records found for this year, please check your maintenance_bills table.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -156,6 +206,7 @@ export default function ChartDashboard() {
                     ))}
                   </Pie>
                   <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
+                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
