@@ -51,6 +51,7 @@ export default function ChartDashboard() {
   const [year, setYear] = useState(2026)
   const [servicePieData, setServicePieData] = useState<ServicePieItem[]>([])
   const [monthBarData, setMonthBarData] = useState<MonthBarItem[]>([])
+  const [totalJobs, setTotalJobs] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -89,11 +90,13 @@ export default function ChartDashboard() {
 
       const pieArr: ServicePieItem[] = Object.entries(serviceMap).map(([name, value]) => ({ name, value }))
       const barArr: MonthBarItem[] = Object.entries(monthMap).map(([name, count]) => ({ name, count }))
+      const total = pieArr.reduce((sum, item) => sum + item.value, 0)
 
       console.log('pie data', pieArr)
       console.log('bar data', barArr)
       setServicePieData(pieArr)
       setMonthBarData(barArr)
+      setTotalJobs(total)
       setLoading(false)
     }
     fetchData()
@@ -127,42 +130,50 @@ export default function ChartDashboard() {
       {loading ? (
         <div className="py-20 text-center">Loading chart data...</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="border rounded-lg p-4 bg-white shadow-sm">
-            <h2 className="font-semibold mb-4">Service Type Distribution</h2>
-            <ResponsiveContainer width="100%" height={320}>
-              <PieChart>
-                <Pie
-                  data={servicePieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={110}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {servicePieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
-              </PieChart>
-            </ResponsiveContainer>
+        <>
+          {/* 总工单卡片 */}
+          <div className="border rounded-lg p-5 bg-white shadow-sm mb-6">
+            <p className="text-gray-500 text-sm">Total Maintenance Jobs ({year})</p>
+            <p className="text-4xl font-bold text-slate-800 mt-1">{totalJobs}</p>
           </div>
 
-          <div className="border rounded-lg p-4 bg-white shadow-sm">
-            <h2 className="font-semibold mb-4">Monthly Job Count</h2>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={monthBarData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis allowDecimals={false} />
-                <Tooltip formatter={(val) => [`${val} job(s)`]} />
-                <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="border rounded-lg p-4 bg-white shadow-sm">
+              <h2 className="font-semibold mb-4">Service Type Distribution</h2>
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                  <Pie
+                    data={servicePieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={110}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {servicePieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={SERVICE_COLOR_MAP[entry.name] ?? DEFAULT_COLOR} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val, name) => [`${val} record(s)`, name === 'Unknown' ? 'No service type assigned' : name]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="border rounded-lg p-4 bg-white shadow-sm">
+              <h2 className="font-semibold mb-4">Monthly Job Count</h2>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={monthBarData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip formatter={(val) => [`${val} job(s)`]} />
+                  <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
