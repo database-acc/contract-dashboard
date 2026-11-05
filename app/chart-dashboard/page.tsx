@@ -30,7 +30,8 @@ const SERVICE_COLOR_MAP: Record<string, string> = {
 }
 const DEFAULT_COLOR = '#6b7280'
 
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+// 自然年顺序 Jan → Dec
+const CALENDAR_MONTH_ORDER = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const MONTH_MAP: Record<string, number> = {
   Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5,
   Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11
@@ -54,16 +55,14 @@ type ChartRow = {
   project: string | null
 }
 
-// 返回：{ calendarYear, monthIndex, businessYear }
-// 财年规则：Dec(11) → 归到下一年；Jan~Nov 归当年
-function parseYearMonth(row: ChartRow): { calendarYear: number | null; monthIndex: number | null; businessYear: number | null } {
+// 返回：calendarYear, monthIndex
+function parseYearMonth(row: ChartRow): { calendarYear: number | null; monthIndex: number | null } {
   if (row.schedule_month_ref) {
     const [yStr, mStr] = row.schedule_month_ref.split('-')
     const y = Number(yStr)
     const m = Number(mStr) - 1
     if (!isNaN(y) && !isNaN(m) && m >=0 && m <=11) {
-      const businessY = m === 11 ? y + 1 : y
-      return { calendarYear: y, monthIndex: m, businessYear: businessY }
+      return { calendarYear: y, monthIndex: m }
     }
   }
   if (row.month) {
@@ -74,12 +73,11 @@ function parseYearMonth(row: ChartRow): { calendarYear: number | null; monthInde
       const mIdx = MONTH_MAP[mStr]
       if (mIdx !== undefined) {
         const calendarY = Number(yyStr) + 2000
-        const businessY = mIdx === 11 ? calendarY + 1 : calendarY
-        return { calendarYear: calendarY, monthIndex: mIdx, businessYear: businessY }
+        return { calendarYear: calendarY, monthIndex: mIdx }
       }
     }
   }
-  return { calendarYear: null, monthIndex: null, businessYear: null }
+  return { calendarYear: null, monthIndex: null }
 }
 
 function getFinalServiceType(row: ChartRow): string {
@@ -120,35 +118,31 @@ export default function ChartDashboard() {
         setLoading(false)
         return
       }
-      console.log('raw bills data all:', data)
 
       const serviceMap: Record<string, number> = {}
-      const monthMap: Record<string, number> = {
-        Jan: 0, Feb: 0, Mar: 0, Apr: 0, May: 0, Jun: 0,
-        Jul: 0, Aug: 0, Sep: 0, Oct: 0, Nov: 0, Dec: 0,
-      }
+      const monthMap: Record<string, number> = {}
+      CALENDAR_MONTH_ORDER.forEach(m => monthMap[m] = 0)
 
-      data.forEach((row: ChartRow, idx) => {
+      data.forEach((row: ChartRow) => {
         const projectText = row.project ?? ''
         const projectOk = projectText.toLowerCase().includes('contract')
-        const { calendarYear, monthIndex, businessYear } = parseYearMonth(row)
+        const { calendarYear, monthIndex } = parseYearMonth(row)
         const serviceLabel = getFinalServiceType(row)
-        console.log(`Row ${idx}: projectOk=${projectOk}, calY=${calendarYear}, busY=${businessYear}, monthIdx=${monthIndex}, service=${serviceLabel}`)
 
         if (!projectOk) return
-        if (businessYear === null || monthIndex === null) return
-        if (businessYear !== year) return
+        if (calendarYear === null || monthIndex === null) return
+        // 严格匹配自然年
+        if (calendarYear !== year) return
 
         serviceMap[serviceLabel] = (serviceMap[serviceLabel] || 0) + 1
-        const mName = MONTH_SHORT[monthIndex]
-        monthMap[mName] += 1
+        const mName = Object.entries(MONTH_MAP).find(([_,v])=>v===monthIndex)?.[0]
+        if(mName && monthMap[mName] !== undefined) monthMap[mName] += 1
       })
 
       const pieArr: ServicePieItem[] = Object.entries(serviceMap).map(([name, value]) => ({ name, value }))
-      const barArr: MonthBarItem[] = Object.entries(monthMap).map(([name, count]) => ({ name, count }))
+      const barArr: MonthBarItem[] = CALENDAR_MONTH_ORDER.map(name => ({ name, count: monthMap[name] }))
       const total = pieArr.reduce((sum, item) => sum + item.value, 0)
 
-      console.log('filtered pie data for business year ' + year, pieArr)
       setServicePieData(pieArr)
       setMonthBarData(barArr)
       setTotalJobs(total)
@@ -169,7 +163,7 @@ export default function ChartDashboard() {
           </button>
           <div>
             <h1 className="text-xl font-bold">Contract Chart Dashboard</h1>
-            <p className="text-sm text-gray-500">Overview of maintenance bills (Business Year: Dec ~ Nov)</p>
+            <p className="text-sm text-gray-500">Overview of maintenance bills (Calendar Year: Jan ~ Dec)</p>
           </div>
         </div>
         <select
@@ -187,10 +181,10 @@ export default function ChartDashboard() {
       ) : (
         <>
           <div className="border rounded-lg p-5 bg-white shadow-sm mb-6">
-            <p className="text-gray-500 text-sm">Total Maintenance Jobs (Business Year {year})</p>
+            <p className="text-gray-500 text-sm">Total Maintenance Jobs (Calendar Year {year})</p>
             <p className="text-4xl font-bold text-slate-800 mt-1">{totalJobs}</p>
             {totalJobs === 0 && (
-              <p className="text-orange-500 text-sm mt-2">⚠️ No matching records found for this business year.</p>
+              <p className="text-orange-500 text-sm mt-2">⚠️ No matching records found for this calendar year.</p>
             )}
           </div>
 
