@@ -25,7 +25,7 @@ const SERVICE_COLOR_MAP: Record<string, string> = {
   GWM: '#0ea5e9',
   KPM: '#8b5cf6',
   KPS: '#10b981',
-  GTC: '#f59e0b',
+  GTC: '#10b981',
   Unknown: '#6b7280'
 }
 const DEFAULT_COLOR = '#6b7280'
@@ -54,20 +54,18 @@ type ChartRow = {
   project: string | null
 }
 
-// 重点：兼容两种格式
-// 1. schedule_month_ref: yyyy-mm
-// 2. month: May-24 / Jan-26
-function parseYearMonth(row: ChartRow): { year: number | null; monthIndex: number | null } {
-  // 优先 schedule_month_ref
+// 返回：{ calendarYear, monthIndex, businessYear }
+// 财年规则：Dec(11) → 归到下一年；Jan~Nov 归当年
+function parseYearMonth(row: ChartRow): { calendarYear: number | null; monthIndex: number | null; businessYear: number | null } {
   if (row.schedule_month_ref) {
     const [yStr, mStr] = row.schedule_month_ref.split('-')
     const y = Number(yStr)
     const m = Number(mStr) - 1
     if (!isNaN(y) && !isNaN(m) && m >=0 && m <=11) {
-      return { year: y, monthIndex: m }
+      const businessY = m === 11 ? y + 1 : y
+      return { calendarYear: y, monthIndex: m, businessYear: businessY }
     }
   }
-  // 解析 May-24 这种 MMM-YY
   if (row.month) {
     const parts = row.month.trim().split('-')
     if (parts.length === 2) {
@@ -75,17 +73,15 @@ function parseYearMonth(row: ChartRow): { year: number | null; monthIndex: numbe
       const yyStr = parts[1]
       const mIdx = MONTH_MAP[mStr]
       if (mIdx !== undefined) {
-        let yy = Number(yyStr)
-        // 24 → 2024，26 → 2026
-        const fullYear = yy + 2000
-        return { year: fullYear, monthIndex: mIdx }
+        const calendarY = Number(yyStr) + 2000
+        const businessY = mIdx === 11 ? calendarY + 1 : calendarY
+        return { calendarYear: calendarY, monthIndex: mIdx, businessYear: businessY }
       }
     }
   }
-  return { year: null, monthIndex: null }
+  return { calendarYear: null, monthIndex: null, businessYear: null }
 }
 
-// 分类规则，description 不区分大小写
 function getFinalServiceType(row: ChartRow): string {
   if (row.service_type) {
     return row.service_type
@@ -135,13 +131,13 @@ export default function ChartDashboard() {
       data.forEach((row: ChartRow, idx) => {
         const projectText = row.project ?? ''
         const projectOk = projectText.toLowerCase().includes('contract')
-        const { year: rowYear, monthIndex } = parseYearMonth(row)
+        const { calendarYear, monthIndex, businessYear } = parseYearMonth(row)
         const serviceLabel = getFinalServiceType(row)
-        console.log(`Row ${idx}: projectOk=${projectOk}, parseYear=${rowYear}, monthIdx=${monthIndex}, service=${serviceLabel}, row=`, row)
+        console.log(`Row ${idx}: projectOk=${projectOk}, calY=${calendarYear}, busY=${businessYear}, monthIdx=${monthIndex}, service=${serviceLabel}`)
 
         if (!projectOk) return
-        if (rowYear === null || monthIndex === null) return
-        if (rowYear !== year) return
+        if (businessYear === null || monthIndex === null) return
+        if (businessYear !== year) return
 
         serviceMap[serviceLabel] = (serviceMap[serviceLabel] || 0) + 1
         const mName = MONTH_SHORT[monthIndex]
@@ -152,7 +148,7 @@ export default function ChartDashboard() {
       const barArr: MonthBarItem[] = Object.entries(monthMap).map(([name, count]) => ({ name, count }))
       const total = pieArr.reduce((sum, item) => sum + item.value, 0)
 
-      console.log('filtered pie data for ' + year, pieArr)
+      console.log('filtered pie data for business year ' + year, pieArr)
       setServicePieData(pieArr)
       setMonthBarData(barArr)
       setTotalJobs(total)
@@ -173,7 +169,7 @@ export default function ChartDashboard() {
           </button>
           <div>
             <h1 className="text-xl font-bold">Contract Chart Dashboard</h1>
-            <p className="text-sm text-gray-500">Overview of maintenance bills</p>
+            <p className="text-sm text-gray-500">Overview of maintenance bills (Business Year: Dec ~ Nov)</p>
           </div>
         </div>
         <select
@@ -191,10 +187,10 @@ export default function ChartDashboard() {
       ) : (
         <>
           <div className="border rounded-lg p-5 bg-white shadow-sm mb-6">
-            <p className="text-gray-500 text-sm">Total Maintenance Jobs ({year})</p>
+            <p className="text-gray-500 text-sm">Total Maintenance Jobs (Business Year {year})</p>
             <p className="text-4xl font-bold text-slate-800 mt-1">{totalJobs}</p>
             {totalJobs === 0 && (
-              <p className="text-orange-500 text-sm mt-2">⚠️ No matching records found for this year. Check project / schedule_month_ref format.</p>
+              <p className="text-orange-500 text-sm mt-2">⚠️ No matching records found for this business year.</p>
             )}
           </div>
 
