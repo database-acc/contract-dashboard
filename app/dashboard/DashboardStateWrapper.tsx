@@ -171,7 +171,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
   }
 
   // ✅ 修改完成：Warranty 使用 border-2 border-dashed border-red-500，和你截图样式一致
-  const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean) => {
+  const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean, isDoneEarly: boolean) => {
     let base = ''
     switch (job) {
       case 'GWM': base = 'bg-sky-100 text-sky-700'; break
@@ -183,6 +183,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     const arr = [base, 'rounded-full px-3 py-1 inline-block']
     if (isMultiMonth) arr.push('!text-amber-500 font-semibold')
     if (isLate) arr.push('ring-2 ring-red-400')
+    if (isDoneEarly) arr.push('ring-2 ring-blue-400 ring-dotted')
     if (isWarranty) arr.push('border-2 border-dashed border-red-500')
     return arr.join(' ')
   }
@@ -334,11 +335,13 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
       planJobs: string[]
       doneJobs: string[]
       lateJobs: string[]
+      earlyJobs: string[]
       billMap: Record<string, BillInfo>
     }> = []
     scheduleMap.forEach((v) => {
       const doneJobs: string[] = []
       const lateJobs: string[] = []
+      const earlyJobs: string[] = []
       const billMap: Record<string, BillInfo> = {}
       v.planJobs.forEach(p => {
         const lookupKey = `${v.branch_name}|${p.job}|${p.planYMKey}`
@@ -348,6 +351,9 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
           billMap[p.job] = billInfo
           if (billInfo.billYM > p.planYM) {
             lateJobs.push(p.job)
+          }
+          if (billInfo.billYM < p.planYM) {
+            earlyJobs.push(p.job)
           }
         }
       })
@@ -359,6 +365,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
         planJobs: planJobStr,
         doneJobs: doneJobStr,
         lateJobs,
+        earlyJobs,
         billMap
       })
     })
@@ -577,6 +584,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                   const allDone = item.planJobs.every(j => item.doneJobs.includes(j))
                   const someDone = item.planJobs.some(j => item.doneJobs.includes(j))
                   const hasLate = item.lateJobs.length > 0
+                  const hasEarly = item.earlyJobs.length > 0
                   // ✅ 判断是不是第一行，切换tooltip方向
                   const isFirstRow = idx === 0
                   const tooltipClass = isFirstRow
@@ -598,7 +606,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           {item.planJobs.map(job => (
                             <span
                               key={job}
-                              className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${jobBadgeClass(job, false, false, false, false)}`}
+                              className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${jobBadgeClass(job, false, false, false, false, false)}`}
                             >
                               {job}
                             </span>
@@ -613,11 +621,12 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                             item.doneJobs.map(job => {
                               const info = item.billMap[job]
                               const isLate = item.lateJobs.includes(job)
+                              const isEarly = item.earlyJobs.includes(job)
                               const isWarranty = info?.projectType === 'WARRANTY'
                               return (
                                 <span
                                   key={job}
-                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth, isWarranty)}`}
+                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth, isWarranty, isEarly)}`}
                                 >
                                   {job}
                                   <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
@@ -686,7 +695,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
             </tbody>
           </table>
         </div>
-        {/* ✅ 图例说明 Note（已修改：删掉 No red border，新增 Yellow text = Multi Month） */}
+        {/* ✅ 更新图例 */}
         <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
           <div className="font-semibold mb-2">Legend Notes:</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
@@ -699,8 +708,12 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
               <span>Solid red ring = Done (Late)</span>
             </div>
             <div className="flex items-center gap-2">
+              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100 ring-2 ring-blue-400 ring-dotted"></span>
+              <span>Blue dotted ring = Done Early</span>
+            </div>
+            <div className="flex items-center gap-2">
               <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 !text-amber-500 font-semibold text-xs">KPS</span>
-              <span>Yellow text = Multi Month</span>
+              <span>KPS Yellow text = Multiple jobs / months in one Bill</span>
             </div>
           </div>
         </div>
