@@ -153,6 +153,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     alert('Export Excel function')
   }
 
+  // ✅ 修改完成：Warranty 使用 border-2 border-dashed border-red-500，和你截图样式一致
   const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean) => {
     let base = ''
     switch (job) {
@@ -162,11 +163,10 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
       case 'GTC': base = 'bg-amber-100 text-amber-700'; break
       default: base = 'bg-gray-100 text-gray-700'
     }
-    const arr = [base]
+    const arr = [base, 'rounded-full px-3 py-1 inline-block']
     if (isMultiMonth) arr.push('!text-amber-500 font-semibold')
     if (isLate) arr.push('ring-2 ring-red-400')
-    // ✅ Warranty：红色虚线边框
-    if (isWarranty) arr.push('ring-2 ring-dashed ring-red-500')
+    if (isWarranty) arr.push('border-2 border-dashed border-red-500')
     return arr.join(' ')
   }
 
@@ -663,6 +663,24 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
               )}
             </tbody>
           </table>
+        </div>
+        {/* ✅ 新增图例说明 Note */}
+        <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
+          <div className="font-semibold mb-2">Legend Notes:</div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100 border-2 border-dashed border-red-500"></span>
+              <span>Red dashed border = WARRANTY</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100 ring-2 ring-red-400"></span>
+              <span>Solid red ring = Done (Late)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100"></span>
+              <span>No red border = Normal Contract Job</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
