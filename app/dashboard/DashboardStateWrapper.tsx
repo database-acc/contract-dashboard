@@ -664,7 +664,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
             </tbody>
           </table>
         </div>
-        {/* ✅ 新增图例说明 Note */}
+        {/* ✅ 图例说明 Note（已修改：删掉 No red border，新增 Yellow text = Multi Month） */}
         <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
           <div className="font-semibold mb-2">Legend Notes:</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
@@ -677,8 +677,8 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
               <span>Solid red ring = Done (Late)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100"></span>
-              <span>No red border = Normal Contract Job</span>
+              <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 !text-amber-500 font-semibold text-xs">KPS</span>
+              <span>Yellow text = Multi Month</span>
             </div>
           </div>
         </div>
