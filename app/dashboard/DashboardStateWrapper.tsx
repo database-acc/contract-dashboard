@@ -68,6 +68,23 @@ function getBillJobType(descRaw: string | null, total: number | null): string | 
   return null
 }
 
+// ✅ 新增：格式化 Ref Month 01/01/2026 → Jan 2026
+function formatRefMonth(text: string | null | undefined): string {
+  if (!text) return ""
+  const parts = text.split("&").map(p => p.trim())
+  const formatted = parts.map(part => {
+    const dateSlashMatch = part.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (dateSlashMatch) {
+      const [, dd, mm, yyyy] = dateSlashMatch
+      const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+      return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
+    }
+    // 兼容已经是 Jan-26 格式的兜底
+    return part
+  })
+  return formatted.join(" & ")
+}
+
 const monthAbbrMap: Record<string, number> = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
@@ -603,7 +620,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                                     <div>Date: {info?.billDate ?? '-'}</div>
                                     <div>Amount: {info?.total ?? '-'}</div>
                                     <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
-                                    {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
+                                    {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {formatRefMonth(info.refRawText)}</div>}
                                     {isWarranty && (
                                       <div className="text-red-400 font-bold mt-0.5">WARRANTY</div>
                                     )}
