@@ -44,21 +44,19 @@ type Props = {
 
 const jobPriority: Record<string, number> = { GWM: 1, KPM: 2, KPS: 3, GTC: 4 }
 
-// ✅ 新增：拆分 & 分隔的多服务类型
+// ✅ 拆分 & 分隔的多服务类型
 function splitServiceTypes(raw: string | null | undefined): string[] {
   if (!raw) return []
   return raw.split('&').map(s => s.trim()).filter(Boolean)
 }
 
-// ✅ 修改：返回 string | null，不再返回 undefined，修复TS2322报错
+// ✅ 根据description自动识别service_type（CONTRACT用）
 function getBillJobType(descRaw: string | null, total: number | null): string | null {
   if (!descRaw) return null
   const d = descRaw.trim().toUpperCase()
   if (d.includes('KITCHEN PIPELINE MANAGEMENT')) return 'KPM'
-  if (d.includes('GREASE WASTE')) return 'GWM'
-
+  if (d.includes('GREASE WASTE MANAGEMENT')) return 'GWM'
   if (d.includes('PLUMBING')) {
-    // >=1500 判定为 KPM，否则 KPS
     if (total && total >= 1500) {
       return 'KPM'
     } else {
@@ -66,6 +64,7 @@ function getBillJobType(descRaw: string | null, total: number | null): string | 
     }
   }
   if (d.includes('KITCHEN PIPELINE SERVICE')) return 'KPS'
+  if (d.includes('GREASE TRAP CLEARANCE')) return 'GTC'
   return null
 }
 
@@ -84,43 +83,41 @@ type ParseResult = {
   originalText: string;
 }
 
-// 解析函数：返回数组，支持 & 分隔多个月份，标记是否多月份
 function parseBillMonth(monthStr: string | null): ParseResult {
   if (!monthStr) return { list: [], isMultiMonth: false, originalText: '' }
   const results: ParsedMonthItem[] = []
   const parts = monthStr.split('&').map(s => s.trim()).filter(Boolean)
   const isMultiMonth = parts.length > 1
   for (const s of parts) {
-    // 格式1： 01/01/2026  dd/mm/yyyy
+    // dd/mm/yyyy
     const dateSlashMatch = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (dateSlashMatch) {
-      const day = parseInt(dateSlashMatch[1],10)
-      const m = parseInt(dateSlashMatch[2],10)
-      const y = parseInt(dateSlashMatch[3],10)
-      if (m >=1 && m <=12 && y >=2020) {
-        results.push({year:y, month:m})
-        continue
+      const m = parseInt(dateSlashMatch[2], 10)
+      const y = parseInt(dateSlashMatch[3], 10)
+      if (m >= 1 && m <= 12 && y >= 2020) {
+        results.push({ year: y, month: m })
       }
+      continue
     }
-    // 格式2： 2026-01 iso
+    // 2026-01
     const isoMatch = s.match(/^(\d{4})-(\d{1,2})$/)
     if (isoMatch) {
       const y = parseInt(isoMatch[1], 10)
       const m = parseInt(isoMatch[2], 10)
-      if (m >= 1 && m <= 12 && y >=2020) {
+      if (m >= 1 && m <= 12 && y >= 2020) {
         results.push({ year: y, month: m })
-        continue
       }
+      continue
     }
-    // 格式3： Jan-26
-    const mAbbr = s.match(/^([A-Za-z]{3})-(\d{2})$/)
-    if (mAbbr) {
-      const month = monthAbbrMap[mAbbr[1]]
-      if (!month) continue
-      const yy = parseInt(mAbbr[2], 10)
-      const fullYear = 2000 + yy
-      if (fullYear >= 2020) {
-        results.push({ year: fullYear, month })
+    // Jan-26
+    const abbrMatch = s.match(/^([A-Za-z]{3})-(\d{2})$/)
+    if (abbrMatch) {
+      const abbr = abbrMatch[1]
+      const yy = parseInt(abbrMatch[2], 10)
+      const m = monthAbbrMap[abbr]
+      if (m) {
+        const fullYear = 2000 + yy
+        results.push({ year: fullYear, month: m })
       }
     }
   }
@@ -135,7 +132,8 @@ type BillInfo = {
   docNo: string | null
   isMultiMonth: boolean
   refRawText: string
-  serviceTypes: string[] // 存拆分后的数组
+  serviceTypes: string[]
+  projectType: string // CONTRACT / WARRANTY
 }
 
 export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isBoss, updateBillServiceType, children }: Props) {
@@ -144,10 +142,8 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
   const [activeMonth, setActiveMonth] = useState(1)
   const [searchText, setSearchText] = useState('')
   const [customerFilter, setCustomerFilter] = useState<'all' | 'CBTL' | "Nando's">('all')
-  // ✅ 新增服务筛选
   const [serviceFilter, setServiceFilter] = useState<'all' | 'GWM' | 'KPM' | 'KPS' | 'GTC'>('all')
 
-  // 侧边抽屉开关
   const [sideOpen, setSideOpen] = useState(false)
 
   const handleRefresh = () => {
@@ -157,26 +153,20 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     alert('Export Excel function')
   }
 
-  // ✅ Late + MultiMonth：原底色 + 黄色文字 + 红色边框
-const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean) => {
-  let base = ''
-  switch (job) {
-    case 'GWM': base = 'bg-sky-100 text-sky-700'; break
-    case 'KPS': base = 'bg-emerald-100 text-emerald-700'; break
-    case 'KPM': base = 'bg-violet-100 text-violet-700'; break
-    case 'GTC': base = 'bg-amber-100 text-amber-700'; break
-    default: base = 'bg-gray-100 text-gray-600'
+  const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean) => {
+    let base = ''
+    switch (job) {
+      case 'GWM': base = 'bg-sky-100 text-sky-700'; break
+      case 'KPS': base = 'bg-emerald-100 text-emerald-700'; break
+      case 'KPM': base = 'bg-violet-100 text-violet-700'; break
+      case 'GTC': base = 'bg-amber-100 text-amber-700'; break
+      default: base = 'bg-gray-100 text-gray-700'
+    }
+    const arr = [base]
+    if (isMultiMonth) arr.push('!text-amber-500 font-semibold')
+    if (isLate) arr.push('ring-2 ring-red-400')
+    return arr.join(' ')
   }
-
-  const classes = [base]
-  if (isMultiMonth) {
-    classes.push('!text-amber-500 font-semibold')
-  }
-  if (isLate) {
-    classes.push('ring-2 ring-red-500')
-  }
-  return classes.join(' ')
-}
 
   function isWorkInMonth(
     freq: string | null,
@@ -191,33 +181,29 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
     const targetYM = targetYear * 12 + targetMonth
     let startYM = -Infinity
     if (startDateStr && startDateStr.trim()) {
-      const parts = startDateStr.trim().split('-').map(Number)
-      const sy = parts[0]
-      const sm = parts[1]
-      if (!Number.isNaN(sy) && !Number.isNaN(sm)) {
+      const p = startDateStr.trim().split('-').map(Number)
+      const sy = p[0], sm = p[1]
+      if (!isNaN(sy) && !isNaN(sm)) {
         startYM = sy * 12 + sm
       }
     }
     let endYM = Infinity
     if (endDateStr && endDateStr.trim()) {
-      const parts = endDateStr.trim().split('-').map(Number)
-      const ey = parts[0]
-      const em = parts[1]
-      if (!Number.isNaN(ey) && !Number.isNaN(em)) {
+      const p = endDateStr.trim().split('-').map(Number)
+      const ey = p[0], em = p[1]
+      if (!isNaN(ey) && !isNaN(em)) {
         endYM = ey * 12 + em
       }
     }
     if (targetYM < startYM || targetYM > endYM) return false
+
     if (monthOfYear && monthOfYear.trim()) {
-      const months = monthOfYear
-        .split(',')
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !Number.isNaN(n))
-      return months.includes(targetMonth)
+      const arr = monthOfYear.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+      return arr.includes(targetMonth)
     }
     if (freq === 'monthly') return true
-    if (freq === 'quarterly') return [1, 4, 7, 10].includes(targetMonth)
-    if (freq === 'half_year') return [1, 7].includes(targetMonth)
+    if (freq === 'quarterly') return [1,4,7,10].includes(targetMonth)
+    if (freq === 'half_year') return [1,7].includes(targetMonth)
     return false
   }
 
@@ -228,43 +214,52 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
       const bName = bill.branch_name.trim()
       if (!bill.project) return
       const projectTrim = bill.project.trim()
-      if (!projectTrim.includes('CONTRACT')) return
 
-      // ✅ 优先读取 bill 自带 service_type，支持 "GWM & KPM"
+      const isContract = projectTrim.includes('CONTRACT')
+      const isWarranty = projectTrim.includes('WARRANTY')
+
+      if (!isContract && !isWarranty) return
+
+      // WARRANTY 硬性校验：schedule_month_ref 与 service_type 都不能为空
+      if (isWarranty) {
+        if (!bill.schedule_month_ref || !bill.service_type) {
+          return
+        }
+      }
+
       let rawJobStr = bill.service_type
       if (!rawJobStr) {
         rawJobStr = getBillJobType(bill.description, bill.total)
       }
       if (!rawJobStr) return
       const jobList = splitServiceTypes(rawJobStr)
-      if(jobList.length === 0) return
+      if (jobList.length === 0) return
 
-      // 优先 schedule_month_ref， fallback bill.month
       const refYMString = bill.schedule_month_ref ?? bill.month
       const refParseRes = parseBillMonth(refYMString)
       const refYMList = refParseRes.list
       if (refYMList.length === 0) return
+
       const billParseRes = parseBillMonth(bill.month)
       const billYMList = billParseRes.list
       if (billYMList.length === 0) return
       const billYM = billYMList[0].year * 12 + billYMList[0].month
 
       for (const refYMObj of refYMList) {
-        const refYM = refYMObj.year * 12 + refYMObj.month
         const refYMKey = `${refYMObj.year}-${String(refYMObj.month).padStart(2, '0')}`
-        // 同一个bill多个job，循环写入lookup
-        for(const job of jobList) {
+        for (const job of jobList) {
           const key = `${bName}|${job}|${refYMKey}`
           if (!billLookup.has(key)) {
             billLookup.set(key, {
               billYM,
-              refYM,
+              refYM: refYMObj.year * 12 + refYMObj.month,
               billDate: bill.bill_date,
               total: bill.total,
               docNo: bill.doc_no,
               isMultiMonth: refParseRes.isMultiMonth,
               refRawText: refParseRes.originalText,
-              serviceTypes: jobList
+              serviceTypes: jobList,
+              projectType: isContract ? 'CONTRACT' : 'WARRANTY'
             })
           }
         }
@@ -350,7 +345,6 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
     })
 
     let list = result
-    // 搜索文字筛选
     if (searchText) {
       const kw = searchText.toLowerCase()
       list = list.filter(
@@ -359,7 +353,6 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
           b.company_name.toLowerCase().includes(kw)
       )
     }
-    // 客户筛选
     if (customerFilter !== 'all') {
       list = list.filter((b) => {
         const fullName = (b.company_name ?? '').toLowerCase()
@@ -368,7 +361,6 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         return true
       })
     }
-    // ✅ 新增 Service Type 筛选
     if (serviceFilter !== 'all') {
       list = list.filter(b => {
         return b.planJobs.includes(serviceFilter) || b.doneJobs.includes(serviceFilter)
@@ -379,13 +371,13 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
 
   return (
     <div className="w-full relative">
-      {/* 左侧滑出抽屉 - 带动画 */}
+      {/* Side Drawer */}
       <div
-        className={`fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50 p-4 flex flex-col gap-3 pt-20 transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50 flex flex-col gap-3 pt-20 transition-transform duration-300 ease-in-out ${
           sideOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <p className="text-base font-semibold text-gray-600 mb-4 uppercase tracking-wider">
+        <p className="text-base font-semibold text-gray-600 mb-4 uppercase tracking-wider px-4">
           Reports
         </p>
         <a
@@ -393,23 +385,22 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => setSideOpen(false)}
-          className="block bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors shadow-sm text-center"
+          className="block bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors text-center mx-4"
         >
           Annual Maintenance Schedule
         </a>
         <a
           href="/customer-excel"
           onClick={() => setSideOpen(false)}
-          className="block mt-1 bg-emerald-600 text-white px-3 py-2 rounded text-sm hover:bg-emerald-700 transition-colors shadow-sm text-center"
+          className="block mt-1 bg-emerald-600 text-white px-3 py-2 rounded text-sm hover:bg-emerald-700 transition-colors text-center mx-4"
         >
           Customer Schedule Report
         </a>
-        {/* ===== 新增 Boss 专属 Data Validation Checker ===== */}
         {isBoss && (
           <a
             href="/data-checker"
             onClick={() => setSideOpen(false)}
-            className="block mt-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colors shadow-sm text-center"
+            className="block mt-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colors text-center mx-4"
           >
             Data Validation Checker
           </a>
@@ -417,23 +408,21 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
 
         <button
           onClick={() => setSideOpen(false)}
-          className="mt-auto text-slate-500 underline text-sm"
+          className="mt-auto text-slate-500 underline text-sm px-4 py-2"
         >
           Close
         </button>
       </div>
+      {/* Overlay */}
+      {sideOpen && (
+        <div
+          onClick={() => setSideOpen(false)}
+          className="fixed inset-0 bg-black/30 z-40"
+        />
+      )}
 
-      {/* 遮罩 带动画淡入淡出 */}
-      <div
-        onClick={() => setSideOpen(false)}
-        className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ease-in-out ${
-          sideOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-      />
-
-      {/* ========== 【单行筛选栏，强制不换行】 ========== */}
+      {/* Filter Bar */}
       <div className="flex flex-nowrap items-center gap-1 mb-4 p-2 bg-white border border-gray-200 rounded-md shadow-sm overflow-x-auto">
-        {/* ✅ 汉堡按钮放到 Monthly Schedule 左边 */}
         <button
           onClick={() => setSideOpen(!sideOpen)}
           className="p-1 rounded hover:bg-gray-100 transition-colors text-slate-700 shrink-0"
@@ -443,19 +432,15 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
           </svg>
         </button>
 
-        <span className="text-sm font-semibold text-gray-700 whitespace-nowrap shrink-0">
-          Monthly Schedule
-        </span>
+        <span className="text-sm font-semibold text-gray-700 shrink-0">Monthly Schedule</span>
 
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Customer:</span>
+          <span className="text-sm font-medium text-gray-700">Customer:</span>
           <button
             type="button"
             onClick={() => setCustomerFilter('all')}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
-              customerFilter === 'all'
-                ? 'bg-red-700 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              customerFilter === 'all' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             All
@@ -464,9 +449,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             type="button"
             onClick={() => setCustomerFilter('CBTL')}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
-              customerFilter === 'CBTL'
-                ? 'bg-red-700 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              customerFilter === 'CBTL' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             CBTL
@@ -475,18 +458,15 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             type="button"
             onClick={() => setCustomerFilter("Nando's")}
             className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
-              customerFilter === "Nando's"
-                ? 'bg-red-700 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              customerFilter === "Nando's" ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             Nando's
           </button>
         </div>
 
-        {/* ✅ Service Type 筛选下拉 */}
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Service:</span>
+          <span className="text-sm font-medium text-gray-700">Service:</span>
           <select
             value={serviceFilter}
             onChange={(e) => setServiceFilter(e.target.value as any)}
@@ -500,11 +480,10 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
           </select>
         </div>
 
-        {/* ✅ Year 移动至 Service 之后、月份按钮之前 */}
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 shrink-0"
+          className="border border-gray-300 rounded px-1.5 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500 shrink-0"
         >
           <option value={2026}>2026</option>
           <option value={2027}>2027</option>
@@ -512,7 +491,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         </select>
 
         <div className="flex gap-0.5 shrink-0">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
+          {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
             <button
               key={m}
               type="button"
@@ -534,9 +513,8 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Search branch / customer"
-            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm min-w-24 max-w-32 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            className="border border-gray-300 rounded px-1.5 py-0.5 text-sm min-w-24 max-w-32 focus:outline-none focus:ring-2 focus:ring-red-500"
           />
-
           <button
             type="button"
             onClick={handleRefresh}
@@ -555,6 +533,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
         </div>
       </div>
 
+      {/* Table */}
       <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-auto min-w-full border-collapse text-sm">
@@ -570,14 +549,14 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
             <tbody>
               {combinedList.length === 0 ? (
                 <tr>
-                  <td className="border border-gray-200 px-3 py-6 text-center text-gray-400" colSpan={5}>
-                    No CONTRACT job for this month
+                  <td colSpan={5} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
+                    No CONTRACT / WARRANTY job for this month
                   </td>
                 </tr>
               ) : (
                 combinedList.map((item, idx) => {
-                  const allDone = item.planJobs.every((j) => item.doneJobs.includes(j))
-                  const someDone = item.planJobs.some((j) => item.doneJobs.includes(j))
+                  const allDone = item.planJobs.every(j => item.doneJobs.includes(j))
+                  const someDone = item.planJobs.some(j => item.doneJobs.includes(j))
                   const hasLate = item.lateJobs.length > 0
                   return (
                     <tr
@@ -592,7 +571,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                       </td>
                       <td className="border border-gray-200 px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
-                          {item.planJobs.map((job) => (
+                          {item.planJobs.map(job => (
                             <span
                               key={job}
                               className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${jobBadgeClass(job, false, false, false)}`}
@@ -607,12 +586,13 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                           {item.doneJobs.length === 0 ? (
                             <span className="text-gray-400">-</span>
                           ) : (
-                            item.doneJobs.map((job) => {
+                            item.doneJobs.map(job => {
                               const info = item.billMap[job]
+                              const isLate = item.lateJobs.includes(job)
                               return (
                                 <span
                                   key={job}
-                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, item.lateJobs.includes(job), info.isMultiMonth)}`}
+                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth)}`}
                                 >
                                   {job}
                                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
@@ -621,6 +601,9 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                                     <div>Amount: {info?.total ?? '-'}</div>
                                     <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
                                     {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
+                                    {info?.projectType === 'WARRANTY' && (
+                                      <div className="text-red-400 font-bold mt-0.5">WARRANTY</div>
+                                    )}
                                   </span>
                                 </span>
                               )
@@ -637,13 +620,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                                 {item.doneJobs.map((j) => {
                                   const info = item.billMap[j]
                                   return (
-                                    <div key={j}>
-                                      <div>Doc No: {info?.docNo ?? '-'}</div>
-                                      <div>Date: {info?.billDate ?? '-'}</div>
-                                      <div>Amount: {info?.total ?? '-'}</div>
-                                      <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
-                                      {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
-                                    </div>
+                                    <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
                                   )
                                 })}
                               </span>
@@ -655,13 +632,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                                 {item.doneJobs.map((j) => {
                                   const info = item.billMap[j]
                                   return (
-                                    <div key={j}>
-                                      <div>Doc No: {info?.docNo ?? '-'}</div>
-                                      <div>Date: {info?.billDate ?? '-'}</div>
-                                      <div>Amount: {info?.total ?? '-'}</div>
-                                      <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
-                                      {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
-                                    </div>
+                                    <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
                                   )
                                 })}
                               </span>
@@ -674,13 +645,7 @@ const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMon
                               {item.doneJobs.map((j) => {
                                 const info = item.billMap[j]
                                 return (
-                                  <div key={j}>
-                                    <div>Doc No: {info?.docNo ?? '-'}</div>
-                                    <div>Date: {info?.billDate ?? '-'}</div>
-                                    <div>Amount: {info?.total ?? '-'}</div>
-                                    <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
-                                    {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
-                                  </div>
+                                  <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
                                 )
                               })}
                             </span>
