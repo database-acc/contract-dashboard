@@ -577,6 +577,11 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                   const allDone = item.planJobs.every(j => item.doneJobs.includes(j))
                   const someDone = item.planJobs.some(j => item.doneJobs.includes(j))
                   const hasLate = item.lateJobs.length > 0
+                  // ✅ 判断是不是第一行，切换tooltip方向
+                  const isFirstRow = idx === 0
+                  const tooltipClass = isFirstRow
+                    ? "absolute top-full left-1/2 -translate-x-1/2 mt-1 hidden group-hover:flex flex-col"
+                    : "absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col"
                   return (
                     <tr
                       key={item.branch_name}
@@ -615,7 +620,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                                   className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth, isWarranty)}`}
                                 >
                                   {job}
-                                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                                  <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
                                     <div>Doc No: {info?.docNo ?? '-'}</div>
                                     <div>Date: {info?.billDate ?? '-'}</div>
                                     <div>Amount: {info?.total ?? '-'}</div>
@@ -636,7 +641,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           hasLate ? (
                             <span className="relative text-orange-600 font-semibold cursor-help group">
                               ✅ Done (Late)
-                              <span className="absolute bottom-full left-0 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                              <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
                                 {item.doneJobs.map((j) => {
                                   const info = item.billMap[j]
                                   return (
@@ -648,7 +653,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           ) : (
                             <span className="relative text-green-600 font-semibold cursor-help group">
                               ✅ On Time
-                              <span className="absolute bottom-full left-0 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                              <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
                                 {item.doneJobs.map((j) => {
                                   const info = item.billMap[j]
                                   return (
@@ -661,7 +666,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                         ) : someDone ? (
                           <span className="relative text-orange-600 font-semibold cursor-help group">
                             ⏳ Partial Done
-                            <span className="absolute bottom-full left-0 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
+                            <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
                               {item.doneJobs.map((j) => {
                                 const info = item.billMap[j]
                                 return (
