@@ -153,7 +153,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     alert('Export Excel function')
   }
 
-  const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean) => {
+  const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean) => {
     let base = ''
     switch (job) {
       case 'GWM': base = 'bg-sky-100 text-sky-700'; break
@@ -165,6 +165,8 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     const arr = [base]
     if (isMultiMonth) arr.push('!text-amber-500 font-semibold')
     if (isLate) arr.push('ring-2 ring-red-400')
+    // ✅ Warranty：红色虚线边框
+    if (isWarranty) arr.push('ring-2 ring-dashed ring-red-500')
     return arr.join(' ')
   }
 
@@ -574,7 +576,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           {item.planJobs.map(job => (
                             <span
                               key={job}
-                              className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${jobBadgeClass(job, false, false, false)}`}
+                              className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${jobBadgeClass(job, false, false, false, false)}`}
                             >
                               {job}
                             </span>
@@ -589,10 +591,11 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                             item.doneJobs.map(job => {
                               const info = item.billMap[job]
                               const isLate = item.lateJobs.includes(job)
+                              const isWarranty = info?.projectType === 'WARRANTY'
                               return (
                                 <span
                                   key={job}
-                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth)}`}
+                                  className={`relative inline-block px-2.5 py-1 rounded-full text-xs font-semibold cursor-help group ${jobBadgeClass(job, true, isLate, info.isMultiMonth, isWarranty)}`}
                                 >
                                   {job}
                                   <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50">
@@ -601,7 +604,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                                     <div>Amount: {info?.total ?? '-'}</div>
                                     <div className="text-amber-300">Services: {info?.serviceTypes.join(' & ') ?? '-'}</div>
                                     {info?.isMultiMonth && <div className="text-amber-300">Ref Month: {info.refRawText}</div>}
-                                    {info?.projectType === 'WARRANTY' && (
+                                    {isWarranty && (
                                       <div className="text-red-400 font-bold mt-0.5">WARRANTY</div>
                                     )}
                                   </span>
