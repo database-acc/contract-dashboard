@@ -65,7 +65,7 @@ function getBillJobType(descRaw: string | null, total: number | null): string | 
   return null
 }
 
-// 复用：解析 schedule_month_ref
+// 复用：解析 schedule_month_ref，新增支持 May-24 / Jun-26 (MMM-YY)
 type ParseRefResult = {
   year: number | null
   month: number | null
@@ -90,6 +90,22 @@ function parseScheduleRef(refStr: string | null): ParseRefResult {
     const m = parseInt(dmy[2], 10)
     const y = parseInt(dmy[3], 10)
     if (y >= 2020 && m >= 1 && m <= 12) return { year: y, month: m }
+  }
+
+  // MMM-YY e.g. May-24, Jun-26
+  const monthMap: Record<string, number> = {
+    jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
+    jul:7, aug:8, sep:9, oct:10, nov:11, dec:12
+  }
+  const mmmYY = first.match(/^([a-z]{3})-(\d{2})$/i)
+  if (mmmYY) {
+    const mStr = mmmYY[1].toLowerCase()
+    const yy = parseInt(mmmYY[2], 10)
+    if (monthMap[mStr]) {
+      const y = 2000 + yy
+      const m = monthMap[mStr]
+      return { year: y, month: m }
+    }
   }
   return { year: null, month: null }
 }
@@ -129,7 +145,7 @@ function shouldContractProducePlan(
   const freq = ct.frequency?.trim() ?? ''
   if (freq === 'monthly') return true
   if (freq === 'quarterly') return [1, 4, 7, 10].includes(targetM)
-  if (freq === 'half_year' || freq === 'half‑year') return [1, 7].includes(targetM)
+  if (freq === 'half_year' || freq === 'half-year') return [1, 7].includes(targetM)
   return false
 }
 
@@ -145,7 +161,6 @@ export default function BillContractMismatchPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // 全部拿回来，js过滤project包含contract，规避supabase ilike大小写坑
       const { data: billData, error: billErr } = await supabase
         .from('maintenance_bills')
         .select('*')
@@ -168,12 +183,10 @@ export default function BillContractMismatchPage() {
     }
   }
 
-  // 页面首次挂载自动加载
   useEffect(() => {
     loadData()
   }, [])
 
-  // JS层过滤：project包含contract，忽略大小写、前后空格
   const contractBills = useMemo(() => {
     return rawAllBills.filter(bill => {
       if (!bill.project) return false
@@ -182,7 +195,6 @@ export default function BillContractMismatchPage() {
     })
   }, [rawAllBills])
 
-  // 构建合约匹配map key = `${branch}|${service}|${yyyy‑MM}`
   const contractPlanKeySet = useMemo(() => {
     const keySet = new Set<string>()
     contracts.forEach(ct => {
@@ -213,13 +225,17 @@ export default function BillContractMismatchPage() {
     const res: BillMatchItem[] = []
     contractBills.forEach(bill => {
       const bName = bill.branch_name
-      // 如果service_type为空，复用dashboard逻辑从description推导
       let srv = bill.service_type
       if (!srv) {
         srv = getBillJobType(bill.description, bill.total)
       }
       const { year: refY, month: refM } = parseScheduleRef(bill.schedule_month_ref)
+      // 调试打印：看哪一项为空
       if (!bName || !srv || !refY || !refM) {
+        console.log('Bill skipped', bill.id, {
+          bName, srv, refY, refM,
+          scheduleRefRaw: bill.schedule_month_ref
+        })
         return
       }
 
@@ -256,7 +272,6 @@ export default function BillContractMismatchPage() {
           <p className="text-sm text-gray-500">
             Find CONTRACT maintenance bills which CANNOT match any active contract‑branch plan.
           </p>
-          {/* ✅ 调试统计面板 */}
           <div className="mt-2 p-2 bg-slate-100 rounded text-xs font-mono">
             raw bills from DB: {rawAllBills.length} |
             filtered contract bills: {contractBills.length} |
