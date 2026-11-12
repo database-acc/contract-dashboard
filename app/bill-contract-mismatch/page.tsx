@@ -26,6 +26,7 @@ type MaintenanceBillRow = {
   project: string | null
   service_type: string | null
   schedule_month_ref: string | null
+  month: string | null
   doc_no: string | null
   bill_date: string | null
   description: string | null
@@ -39,6 +40,7 @@ type BillMatchItem = {
   docNo: string | null
   billDate: string | null
   scheduleRef: string | null
+  monthRaw: string | null
   description: string | null
   total: number | null
   refYear: number | null
@@ -47,7 +49,6 @@ type BillMatchItem = {
   isMatched: boolean
 }
 
-// 和dashboard复用：根据description自动识别service_type
 function getBillJobType(descRaw: string | null, total: number | null): string | null {
   if (!descRaw) return null
   const d = descRaw.trim().toUpperCase()
@@ -65,39 +66,33 @@ function getBillJobType(descRaw: string | null, total: number | null): string | 
   return null
 }
 
-// 复用：解析 schedule_month_ref，新增支持 May-24 / Jun-26 (MMM-YY)
 type ParseRefResult = {
   year: number | null
   month: number | null
 }
-function parseScheduleRef(refStr: string | null): ParseRefResult {
-  if (!refStr) return { year: null, month: null }
-  const parts = refStr.split('&').map(s => s.trim()).filter(Boolean)
-  const first = parts[0]
-  if (!first) return { year: null, month: null }
-
+function parseMonthString(str: string | null): ParseRefResult {
+  if (!str) return { year: null, month: null }
+  const s = str.trim()
   // 2026-01
-  const iso = first.match(/^(\d{4})-(\d{1,2})$/)
+  const iso = s.match(/^(\d{4})-(\d{1,2})$/)
   if (iso) {
     const y = parseInt(iso[1], 10)
     const m = parseInt(iso[2], 10)
     if (y >= 2020 && m >= 1 && m <= 12) return { year: y, month: m }
   }
-
   // dd/mm/yyyy
-  const dmy = first.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  const dmy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   if (dmy) {
     const m = parseInt(dmy[2], 10)
     const y = parseInt(dmy[3], 10)
     if (y >= 2020 && m >= 1 && m <= 12) return { year: y, month: m }
   }
-
   // MMM-YY e.g. May-24, Jun-26
   const monthMap: Record<string, number> = {
     jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
     jul:7, aug:8, sep:9, oct:10, nov:11, dec:12
   }
-  const mmmYY = first.match(/^([a-z]{3})-(\d{2})$/i)
+  const mmmYY = s.match(/^([a-z]{3})-(\d{2})$/i)
   if (mmmYY) {
     const mStr = mmmYY[1].toLowerCase()
     const yy = parseInt(mmmYY[2], 10)
@@ -110,7 +105,14 @@ function parseScheduleRef(refStr: string | null): ParseRefResult {
   return { year: null, month: null }
 }
 
-// 从 contract_no 提取服务类型 GWM / KPM / KPS / GTC
+// 优先 schedule_month_ref，空则 fallback 到 month
+function getBillYearMonth(bill: MaintenanceBillRow): ParseRefResult {
+  if (bill.schedule_month_ref) {
+    return parseMonthString(bill.schedule_month_ref)
+  }
+  return parseMonthString(bill.month)
+}
+
 function extractServiceFromContractNo(no: string | null | undefined): string | null {
   if (!no) return null
   const seg = String(no).split('-')
@@ -120,7 +122,6 @@ function extractServiceFromContractNo(no: string | null | undefined): string | n
   return null
 }
 
-// 判断该 contract_branch 在指定年月是否生成计划（和data‑checker完全相同逻辑）
 function shouldContractProducePlan(
   ct: ContractBranchRow,
   targetY: number,
@@ -229,12 +230,13 @@ export default function BillContractMismatchPage() {
       if (!srv) {
         srv = getBillJobType(bill.description, bill.total)
       }
-      const { year: refY, month: refM } = parseScheduleRef(bill.schedule_month_ref)
-      // 调试打印：看哪一项为空
+      const { year: refY, month: refM } = getBillYearMonth(bill)
+
       if (!bName || !srv || !refY || !refM) {
         console.log('Bill skipped', bill.id, {
           bName, srv, refY, refM,
-          scheduleRefRaw: bill.schedule_month_ref
+          scheduleRefRaw: bill.schedule_month_ref,
+          monthRaw: bill.month
         })
         return
       }
@@ -250,6 +252,7 @@ export default function BillContractMismatchPage() {
         docNo: bill.doc_no,
         billDate: bill.bill_date,
         scheduleRef: bill.schedule_month_ref,
+        monthRaw: bill.month,
         description: bill.description,
         total: bill.total,
         refYear: refY,
@@ -302,7 +305,7 @@ export default function BillContractMismatchPage() {
                 <th className="p-2 text-left">Service Type</th>
                 <th className="p-2 text-left">Doc No</th>
                 <th className="p-2 text-left">Bill Date</th>
-                <th className="p-2 text-left">Schedule Month Ref</th>
+                <th className="p-2 text-left">Schedule Ref / Month</th>
                 <th className="p-2 text-left">Match‑Key</th>
                 <th className="p-2 text-left">Amount</th>
                 <th className="p-2 text-left">Description</th>
@@ -319,7 +322,7 @@ export default function BillContractMismatchPage() {
                     <td className="p-2 font-semibold">{item.serviceType ?? '-'}</td>
                     <td className="p-2">{item.docNo ?? '-'}</td>
                     <td className="p-2">{item.billDate ?? '-'}</td>
-                    <td className="p-2">{item.scheduleRef ?? '-'}</td>
+                    <td className="p-2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
                     <td className="p-2 font-mono text-xs">{item.matchKey}</td>
                     <td className="p-2">{item.total ?? '-'}</td>
                     <td className="p-2 max-w-52 truncate">{item.description ?? '-'}</td>
@@ -341,7 +344,7 @@ export default function BillContractMismatchPage() {
                 <th className="p-2 text-left">Branch Name</th>
                 <th className="p-2 text-left">Service Type</th>
                 <th className="p-2 text-left">Doc No</th>
-                <th className="p-2 text-left">Schedule Month Ref</th>
+                <th className="p-2 text-left">Schedule Ref / Month</th>
                 <th className="p-2 text-left">Match‑Key</th>
               </tr>
             </thead>
@@ -355,7 +358,7 @@ export default function BillContractMismatchPage() {
                     <td className="p-2">{item.branchName ?? '-'}</td>
                     <td className="p-2 font-semibold">{item.serviceType ?? '-'}</td>
                     <td className="p-2">{item.docNo ?? '-'}</td>
-                    <td className="p-2">{item.scheduleRef ?? '-'}</td>
+                    <td className="p-2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
                     <td className="p-2 font-mono text-xs">{item.matchKey}</td>
                   </tr>
                 ))
