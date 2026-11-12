@@ -2,31 +2,38 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
-// 和 page.tsx 服务端类型保持一致
+// 和服务端 page.tsx 保持完全一致
 type ContractBranchRow = {
   id: bigint
-  contract_no: string | null | undefined
+  contract_no: string | null
   branch_name: string | null
   frequency: string | null
+  company_name: string | null
+  description: string | null
   start_date: string | null
   end_date: string | null
   status: string | null
   month_of_year: string | null
-  description: string | null
+  times_per_year: string | null
+  schedule_rule: string | null
   project: string | null
 }
 
 type MaintenanceBillRow = {
   id: bigint
-  branch_name: string | null
-  project: string | null
-  service_type: string | null
-  schedule_month_ref: string | null
+  area_code: string | null
   month: string | null
+  schedule_month_ref: string | null
   doc_no: string | null
   bill_date: string | null
+  company_name: string | null
   description: string | null
+  agent: string | null
+  area: string | null
+  project: string | null
   total: number | null
+  branch_name: string | null
+  service_type: string | null
 }
 
 type BillContractMismatchPageProps = {
@@ -146,7 +153,7 @@ function isWorkInMonth(
   return false
 }
 
-export default function BillContractMismatchPage({ rawBranchData, rawBillsData }: BillContractMismatchPageProps) {
+export default function BillContractMismatchPage({ rawBranchData, rawBillsData, isBoss }: BillContractMismatchPageProps) {
   const router = useRouter()
   const [planYear, setPlanYear] = useState<number>(2026)
 
