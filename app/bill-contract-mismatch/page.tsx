@@ -152,6 +152,7 @@ export default function BillContractMismatchPage() {
   const isBoss = searchParams.get('isBoss') === 'true'
 
   const [filterYear, setFilterYear] = useState<number>(2025)
+  const [strictMatch, setStrictMatch] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
   const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
   const [contracts, setContracts] = useState<ContractBranchRow[]>([])
@@ -185,17 +186,20 @@ export default function BillContractMismatchPage() {
 
       const refRaw = b.schedule_month_ref ?? b.month
       const parseRes = parseBillMonth(refRaw)
-      // ✅ 改成严格等于选中年份，不再 >=
       return parseRes.list.some(item => item.year === filterYear)
     })
   }, [rawAllBills, filterYear])
 
   const contractPlanKeySet = useMemo(() => {
     const ks = new Set<string>()
+    const ksLoose = new Set<string>()
     contracts.forEach(ct => {
       const bName = ct.branch_name?.trim()
       const srv = extractServiceFromContractNo(ct.contract_no)
-      if (!bName || !srv || !ct.start_date || !ct.end_date) return
+      if (!bName || !srv || !ct.start_date || !ct.end_date) {
+        console.log('⚠️ Contract skip: missing data', ct)
+        return
+      }
 
       const sD = new Date(ct.start_date)
       const eD = new Date(ct.end_date)
@@ -209,12 +213,18 @@ export default function BillContractMismatchPage() {
         for (let m = 1; m <= 12; m++) {
           if (isWorkInMonth(ct.frequency, y, m, ct.start_date, ct.end_date, ct.status, ct.month_of_year)) {
             const ym = `${y}-${String(m).padStart(2, '0')}`
-            ks.add(`${bName}|${srv}|${ym}`)
+            const key = `${bName}|${srv}|${ym}`
+            ks.add(key)
+            // 宽松版本：全部小写、去空格
+            const looseKey = `${bName.toLowerCase().trim()}|${srv.toLowerCase().trim()}|${ym}`
+            ksLoose.add(looseKey)
           }
         }
       }
     })
-    return ks
+    console.log('✅ Contract Strict Keys:', Array.from(ks))
+    console.log('✅ Contract Loose Keys:', Array.from(ksLoose))
+    return { strict: ks, loose: ksLoose }
   }, [contracts, filterYear])
 
   const billRowsWithCalc = useMemo(() => {
@@ -227,18 +237,24 @@ export default function BillContractMismatchPage() {
       const refRaw = bill.schedule_month_ref ?? bill.month
       const parseRes = parseBillMonth(refRaw)
 
-      const computedKeys: { key: string; isMatched: boolean }[] = []
+      const computedKeys: { key: string; looseKey: string; isMatched: boolean }[] = []
       for (const item of parseRes.list) {
-        // 只生成本年份的匹配key
         if (item.year !== filterYear) continue
         for (const s of jobList) {
           const ymStr = `${item.year}-${String(item.month).padStart(2, '0')}`
           const k = `${bName}|${s}|${ymStr}`
-          computedKeys.push({ key: k, isMatched: contractPlanKeySet.has(k) })
+          const looseK = `${bName.toLowerCase().trim()}|${s.toLowerCase().trim()}|${ymStr}`
+          const matched = strictMatch
+            ? contractPlanKeySet.strict.has(k)
+            : contractPlanKeySet.loose.has(looseK)
+          computedKeys.push({ key: k, looseKey: looseK, isMatched: matched })
         }
       }
 
       const anyMatched = computedKeys.some(x => x.isMatched)
+      if (computedKeys.length > 0) {
+        console.log('🧾 Bill', bill.id, 'keys:', computedKeys)
+      }
 
       return {
         ...bill,
@@ -246,7 +262,7 @@ export default function BillContractMismatchPage() {
         anyMatched,
       }
     })
-  }, [contractBills, contractPlanKeySet, filterYear])
+  }, [contractBills, contractPlanKeySet, filterYear, strictMatch])
 
   const matchedCount = billRowsWithCalc.filter(x => x.anyMatched).length
   const mismatchCount = billRowsWithCalc.filter(x => !x.anyMatched).length
@@ -305,19 +321,30 @@ export default function BillContractMismatchPage() {
 
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-slate-700">Select Year:</label>
-            <select
-              value={filterYear}
-              onChange={e => setFilterYear(Number(e.target.value))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
-            >
-              <option value={2024}>2024</option>
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-              <option value={2028}>2028</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-700">Select Year:</label>
+              <select
+                value={filterYear}
+                onChange={e => setFilterYear(Number(e.target.value))}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+              >
+                <option value={2024}>2024</option>
+                <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
+                <option value={2027}>2027</option>
+                <option value={2028}>2028</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={strictMatch}
+                onChange={e => setStrictMatch(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Strict Match (case & space sensitive)
+            </label>
           </div>
 
           <button
@@ -360,7 +387,8 @@ export default function BillContractMismatchPage() {
                   <th className="whitespace-nowrap px-4 py-3">Description</th>
                   <th className="whitespace-nowrap px-4 py-3 text-right">Amount</th>
                   <th className="whitespace-nowrap px-4 py-3">Status</th>
-                  <th className="whitespace-nowrap px-4 py-3">Computed Match Keys</th>
+                  <th className="whitespace-nowrap px-4 py-3">Match Keys</th>
+                  <th className="whitespace-nowrap px-4 py-3">Debug Info</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -381,7 +409,7 @@ export default function BillContractMismatchPage() {
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">{row.schedule_month_ref ?? '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">{row.month ?? '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">{row.doc_no ?? '-'}</td>
-                    <td className="max-w-[260px] truncate px-4 py-3 text-slate-600" title={row.description ?? ''}>
+                    <td className="max-w-[220px] truncate px-4 py-3 text-slate-600" title={row.description ?? ''}>
                       {row.description ?? '-'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-sm text-slate-700">
@@ -434,12 +462,19 @@ export default function BillContractMismatchPage() {
                         </div>
                       )}
                     </td>
+                    <td className="px-4 py-3 max-w-[240px]">
+                      {row.computedKeys.length > 0 ? (
+                        <div className="text-xs font-mono text-slate-500 break-all">
+                          {row.computedKeys.map(k => k.looseKey).join(' | ')}
+                        </div>
+                      ) : '-'}
+                    </td>
                   </tr>
                 ))}
 
                 {billRowsWithCalc.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-16 text-center text-sm text-slate-500">
+                    <td colSpan={12} className="px-4 py-16 text-center text-sm text-slate-500">
                       No CONTRACT bills found for selected year.
                     </td>
                   </tr>
@@ -454,6 +489,8 @@ export default function BillContractMismatchPage() {
           <p className="font-medium text-slate-700">How to use</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             <li>Select Year: only show bills whose schedule month is exactly this year.</li>
+            <li><strong>Strict Match ON</strong> : exact string match (case, space, bracket sensitive)</li>
+            <li><strong>Strict Match OFF</strong> : ignore case & extra space, easier to catch name mismatch</li>
             <li><strong>No Plan Match</strong> means the CONTRACT bill could not be linked to any active contract-branch plan.</li>
             <li>Each computed key follows the format <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code>.</li>
           </ul>
