@@ -167,7 +167,7 @@ export default function BillContractMismatchPage() {
   const searchParams = useSearchParams()
   const isBoss = searchParams.get('isBoss') === 'true'
 
-  const [filterYear, setFilterYear] = useState<number>(2026)
+  const [planYear, setPlanYear] = useState<number>(2026)
   const [strictMatch, setStrictMatch] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
   const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
@@ -191,7 +191,6 @@ export default function BillContractMismatchPage() {
       const { data: billData, error: billErr } = await supabase.from('maintenance_bills').select('*')
       if (billErr) throw billErr
 
-      // 这里select增加description，之前漏了！
       const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('id, contract_no, branch_name, frequency, start_date, end_date, status, month_of_year, description').eq('status', 'active')
       if (ctErr) throw ctErr
 
@@ -208,7 +207,8 @@ export default function BillContractMismatchPage() {
     loadData()
   }, [])
 
-  const contractBills = useMemo(() => {
+  // ✅ 修改点：只过滤 project 类型，不再用年份过滤工单！
+  const validBills = useMemo(() => {
     return rawAllBills.filter(b => {
       if (!b.project) return false
       const projUpper = b.project.toUpperCase()
@@ -223,11 +223,10 @@ export default function BillContractMismatchPage() {
       }
       if (!isContract && !isWarranty) return false
 
-      const refRaw = b.schedule_month_ref ?? b.month
-      const parseRes = parseBillMonth(refRaw)
-      return parseRes.list.some(item => item.year === filterYear)
+      // 只要project符合就留下，不卡年份！
+      return true
     })
-  }, [rawAllBills, filterYear])
+  }, [rawAllBills])
 
   const contractPlanKeySet = useMemo(() => {
     const ks = new Set<string>()
@@ -248,8 +247,8 @@ export default function BillContractMismatchPage() {
       }
       // 遍历全年12个月，使用原版isWorkInMonth判断是否排程
       for (let m = 1; m <= 12; m++) {
-        if (isWorkInMonth(ct.frequency, filterYear, m, ct.start_date, ct.end_date, ct.status, ct.month_of_year)) {
-          const ym = `${filterYear}-${String(m).padStart(2, '0')}`
+        if (isWorkInMonth(ct.frequency, planYear, m, ct.start_date, ct.end_date, ct.status, ct.month_of_year)) {
+          const ym = `${planYear}-${String(m).padStart(2, '0')}`
           const key = `${bName}|${srv}|${ym}`
           ks.add(key)
           const looseKey = `${bName.toLowerCase().trim()}|${srv.toLowerCase().trim()}|${ym}`
@@ -257,12 +256,12 @@ export default function BillContractMismatchPage() {
         }
       }
     })
-    console.log('✅ Contract Strict Keys:', Array.from(ks))
+    console.log('✅ Contract Strict Keys (Plan Year ' + planYear + '):', Array.from(ks))
     return { strict: ks, loose: ksLoose }
-  }, [contracts, filterYear])
+  }, [contracts, planYear])
 
   const billRowsWithCalc = useMemo(() => {
-    return contractBills.map(bill => {
+    return validBills.map(bill => {
       const bName = bill.branch_name?.trim() ?? ''
       let rawJobStr = bill.service_type
       if (!rawJobStr) rawJobStr = getBillJobType(bill.description, bill.total)
@@ -273,7 +272,8 @@ export default function BillContractMismatchPage() {
 
       const computedKeys: { key: string; looseKey: string; isMatched: boolean }[] = []
       for (const item of parseRes.list) {
-        if (item.year !== filterYear) continue
+        // ✅ 只匹配【当前选中planYear】的工单月份
+        if (item.year !== planYear) continue
         for (const s of jobList) {
           const ymStr = `${item.year}-${String(item.month).padStart(2, '0')}`
           const k = `${bName}|${s}|${ymStr}`
@@ -300,7 +300,7 @@ export default function BillContractMismatchPage() {
         anyMatched,
       }
     })
-  }, [contractBills, contractPlanKeySet, filterYear, strictMatch])
+  }, [validBills, contractPlanKeySet, planYear, strictMatch])
 
   const matchedCount = billRowsWithCalc.filter(x => x.anyMatched).length
   const mismatchCount = billRowsWithCalc.filter(x => !x.anyMatched).length
@@ -345,15 +345,15 @@ export default function BillContractMismatchPage() {
             <div className="mt-1 text-2xl font-semibold text-slate-900">{displayRawBillCount}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered Bills ({filterYear})</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{contractBills.length}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Valid CONTRACT / WARRANTY Bills</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{validBills.length}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-emerald-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-emerald-700">Matched</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-emerald-700">Matched (Plan Year {planYear})</div>
             <div className="mt-1 text-2xl font-semibold text-emerald-600">{matchedCount}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-rose-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-rose-700">No Plan Match</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-rose-700">No Plan Match (Plan Year {planYear})</div>
             <div className="mt-1 text-2xl font-semibold text-rose-600">{mismatchCount}</div>
           </div>
         </div>
@@ -362,10 +362,10 @@ export default function BillContractMismatchPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-slate-700">Select Year:</label>
+              <label className="text-sm font-medium text-slate-700">Plan Year to Check:</label>
               <select
-                value={filterYear}
-                onChange={e => setFilterYear(Number(e.target.value))}
+                value={planYear}
+                onChange={e => setPlanYear(Number(e.target.value))}
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
               >
                 <option value={2024}>2024</option>
@@ -470,7 +470,7 @@ export default function BillContractMismatchPage() {
                           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M4.93 19h14.14a2 2 0 001.74-3L13.73 4a2 2 0 00-3.46 0L3.2 16a2 2 0 001.73 3z" />
                           </svg>
-                          Skipped
+                          Skipped (Not match selected plan year)
                         </span>
                       ) : row.anyMatched ? (
                         <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
@@ -490,7 +490,7 @@ export default function BillContractMismatchPage() {
                     </td>
                     <td className="px-4 py-3">
                       {row.computedKeys.length === 0 ? (
-                        <span className="text-xs text-slate-400">Branch/service/month not valid</span>
+                        <span className="text-xs text-slate-400">Month not in plan year</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {row.computedKeys.map((kk, i) => (
@@ -524,7 +524,7 @@ export default function BillContractMismatchPage() {
                 {billRowsWithCalc.length === 0 && (
                   <tr>
                     <td colSpan={13} className="px-4 py-16 text-center text-sm text-slate-500">
-                      No CONTRACT / valid WARRANTY bills found for selected year.
+                      No bills have schedule month in selected Plan Year {planYear}.
                     </td>
                   </tr>
                 )}
@@ -537,12 +537,11 @@ export default function BillContractMismatchPage() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-700">How to use</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            <li>Select Year: only show bills whose schedule month is exactly this year.</li>
-            <li><strong>CONTRACT</strong>: Any project containing CONTRACT will be included.</li>
-            <li><strong>WARRANTY</strong>: Only included when schedule_month_ref AND service_type are not empty (same rule as Dashboard).</li>
+            <li><strong>Plan Year to Check:</strong> Load this year's contract plan, match bills whose schedule month falls on this year.</li>
+            <li><strong>Valid Bills:</strong> All CONTRACT bills + WARRANTY bills (WARRANTY requires schedule_month_ref AND service_type not empty, same rule as Dashboard).</li>
             <li><strong>Strict Match ON</strong> : exact string match (case, space sensitive, same as Dashboard)</li>
             <li><strong>Strict Match OFF</strong> : ignore case & extra space, easier to catch name mismatch</li>
-            <li><strong>No Plan Match</strong> means the bill could not be linked to any active contract-branch plan.</li>
+            <li><strong>No Plan Match</strong> means the bill could not be linked to any active contract-branch plan of selected plan year.</li>
             <li>Each computed key follows the format <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code>, fully aligned with DashboardStateWrapper.</li>
           </ul>
         </div>
