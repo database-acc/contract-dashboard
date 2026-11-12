@@ -239,10 +239,13 @@ export default function BillContractMismatchPage() {
       const refYMList = refParseRes.list
       if (refYMList.length === 0) return null
 
+      // ========== 核心修改：只保留等于当前planYear的月份 ==========
+      const refYMListFiltered = refYMList.filter(item => item.year === planYear)
+      // 如果这条工单里面没有任何一个月份是选中年份 → 直接不显示这条工单
+      if (refYMListFiltered.length === 0) return null
+
       const computedKeys: { key: string; isMatched: boolean }[] = []
-      for (const refYMObj of refYMList) {
-        // 只看当前选中planYear
-        if (refYMObj.year !== planYear) continue
+      for (const refYMObj of refYMListFiltered) {
         const refYMKey = `${refYMObj.year}-${String(refYMObj.month).padStart(2, '0')}`
         for (const job of jobList) {
           const key = `${bName}|${job}|${refYMKey}`
