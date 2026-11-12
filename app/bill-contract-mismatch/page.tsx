@@ -1,45 +1,36 @@
 'use client'
-import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 
-// 和服务端 page.tsx 保持完全一致
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
 type ContractBranchRow = {
   id: bigint
-  contract_no: string | null
+  contract_no: string | null | undefined
   branch_name: string | null
   frequency: string | null
-  company_name: string | null
-  description: string | null
   start_date: string | null
   end_date: string | null
   status: string | null
   month_of_year: string | null
-  times_per_year: string | null
-  schedule_rule: string | null
-  project: string | null
+  description: string | null
 }
 
 type MaintenanceBillRow = {
   id: bigint
-  area_code: string | null
-  month: string | null
+  branch_name: string | null
+  project: string | null
+  service_type: string | null
   schedule_month_ref: string | null
+  month: string | null
   doc_no: string | null
   bill_date: string | null
-  company_name: string | null
   description: string | null
-  agent: string | null
-  area: string | null
-  project: string | null
   total: number | null
-  branch_name: string | null
-  service_type: string | null
-}
-
-type BillContractMismatchPageProps = {
-  rawBranchData?: ContractBranchRow[]
-  rawBillsData?: MaintenanceBillRow[]
-  isBoss?: boolean
 }
 
 // ========== 和 DashboardStateWrapper 完全一致，一字不改 ==========
@@ -153,18 +144,54 @@ function isWorkInMonth(
   return false
 }
 
-export default function BillContractMismatchPage({
-  rawBranchData = [],
-  rawBillsData = [],
-  isBoss = false
-}: BillContractMismatchPageProps) {
+export default function BillContractMismatchPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isBoss = searchParams.get('isBoss') === 'true'
+
   const [planYear, setPlanYear] = useState<number>(2026)
+  const [loading, setLoading] = useState(false)
+  const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
+  const [rawBillTotalCount, setRawBillTotalCount] = useState<number | null>(null)
+  const [contracts, setContracts] = useState<ContractBranchRow[]>([])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const { count: exactCount, error: countErr } = await supabase
+        .from('maintenance_bills')
+        .select('*', { count: 'exact', head: true })
+
+      if (countErr) {
+        console.warn('⚠️ Count query failed, fallback to array length', countErr)
+        setRawBillTotalCount(null)
+      } else {
+        setRawBillTotalCount(exactCount)
+      }
+
+      const { data: billData, error: billErr } = await supabase.from('maintenance_bills').select('*')
+      if (billErr) throw billErr
+
+      const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('id, contract_no, branch_name, frequency, start_date, end_date, status, month_of_year').eq('status', 'active')
+      if (ctErr) throw ctErr
+
+      setRawAllBills(billData as MaintenanceBillRow[])
+      setContracts(ctData as ContractBranchRow[])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [])
 
   // 1. 【和Dashboard完全一样】构建计划Key集合：branch | service | yyyy-MM
   const planKeySet = useMemo(() => {
     const set = new Set<string>()
-    rawBranchData.forEach(ct => {
+    contracts.forEach(ct => {
       const bName = ct.branch_name?.trim()
       if (!bName || !ct.contract_no) return
       // Dashboard原版：只从 contract_no 拿service，**不fallback description！重点**
@@ -182,11 +209,11 @@ export default function BillContractMismatchPage({
       }
     })
     return set
-  }, [rawBranchData, planYear])
+  }, [contracts, planYear])
 
   // 2. 【和Dashboard billLookup 逻辑一模一样】过滤工单 + 生成工单key
   const billRowsWithCalc = useMemo(() => {
-    return rawBillsData.map(bill => {
+    return rawAllBills.map(bill => {
       if (!bill.branch_name || !bill.project) return null
       const bName = bill.branch_name.trim()
       const projTrim = bill.project.trim()
@@ -240,10 +267,11 @@ export default function BillContractMismatchPage({
       computedKeys: { key: string; isMatched: boolean }[]
       anyMatched: boolean
     }>
-  }, [rawBillsData, planKeySet, planYear])
+  }, [rawAllBills, planKeySet, planYear])
 
   const matchedCount = billRowsWithCalc.filter(x => x.anyMatched).length
   const mismatchCount = billRowsWithCalc.filter(x => !x.anyMatched).length
+  const displayRawBillCount = rawBillTotalCount ?? rawAllBills.length
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
@@ -281,7 +309,7 @@ export default function BillContractMismatchPage({
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Raw Bills</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{rawBillsData.length}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{displayRawBillCount}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Valid CONTRACT / WARRANTY Bills</div>
@@ -316,6 +344,29 @@ export default function BillContractMismatchPage({
             </div>
             <span className="text-sm text-slate-500">Strict Match ON (same as Dashboard, no loose mode)</span>
           </div>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+          >
+            {loading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                Loading...
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reload Data
+              </>
+            )}
+          </button>
         </div>
 
         {/* Table Card */}
