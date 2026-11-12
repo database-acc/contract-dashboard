@@ -37,9 +37,9 @@ type MaintenanceBillRow = {
 }
 
 type BillContractMismatchPageProps = {
-  rawBranchData: ContractBranchRow[]
-  rawBillsData: MaintenanceBillRow[]
-  isBoss: boolean
+  rawBranchData?: ContractBranchRow[]
+  rawBillsData?: MaintenanceBillRow[]
+  isBoss?: boolean
 }
 
 // ========== 和 DashboardStateWrapper 完全一致，一字不改 ==========
@@ -153,7 +153,11 @@ function isWorkInMonth(
   return false
 }
 
-export default function BillContractMismatchPage({ rawBranchData, rawBillsData, isBoss }: BillContractMismatchPageProps) {
+export default function BillContractMismatchPage({
+  rawBranchData = [],
+  rawBillsData = [],
+  isBoss = false
+}: BillContractMismatchPageProps) {
   const router = useRouter()
   const [planYear, setPlanYear] = useState<number>(2026)
 
