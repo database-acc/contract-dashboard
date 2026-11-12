@@ -17,6 +17,7 @@ type ContractBranchRow = {
   end_date: string | null
   status: string | null
   month_of_year: string | null
+  description: string | null
 }
 
 type MaintenanceBillRow = {
@@ -190,7 +191,8 @@ export default function BillContractMismatchPage() {
       const { data: billData, error: billErr } = await supabase.from('maintenance_bills').select('*')
       if (billErr) throw billErr
 
-      const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('*').eq('status', 'active')
+      // 这里select增加description，之前漏了！
+      const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('id, contract_no, branch_name, frequency, start_date, end_date, status, month_of_year, description').eq('status', 'active')
       if (ctErr) throw ctErr
 
       setRawAllBills(billData as MaintenanceBillRow[])
@@ -232,8 +234,16 @@ export default function BillContractMismatchPage() {
     const ksLoose = new Set<string>()
     contracts.forEach(ct => {
       const bName = ct.branch_name?.trim()
-      const srv = extractServiceFromContractNo(ct.contract_no)
+      // 先从contract_no拿service
+      let srv = extractServiceFromContractNo(ct.contract_no)
+      // 如果拿不到，后备：用description解析，和工单规则一样
+      if (!srv) {
+        srv = getBillJobType(ct.description, null)
+        console.log(`🔁 Contract ${ct.id}: contract_no no service, fallback to description →`, srv, ' | desc:', ct.description)
+      }
+
       if (!bName || !srv) {
+        console.log(`❌ Skip contract ${ct.id}: branch_name=${bName}, service=${srv}, contract_no=${ct.contract_no}`)
         return
       }
       // 遍历全年12个月，使用原版isWorkInMonth判断是否排程
