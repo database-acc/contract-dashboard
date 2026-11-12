@@ -87,12 +87,12 @@ function parseMonthString(str: string | null): ParseRefResult {
     const y = parseInt(dmy[3], 10)
     if (y >= 2020 && m >= 1 && m <= 12) return { year: y, month: m }
   }
-  // MMM‑YY e.g. May‑24, Jun‑26
+  // MMM‑YY / MMM YY e.g. May‑24, May 24
   const monthMap: Record<string, number> = {
     jan:1, feb:2, mar:3, apr:4, may:5, jun:6,
     jul:7, aug:8, sep:9, oct:10, nov:11, dec:12
   }
-  const mmmYY = s.match(/^([a-z]{3})-(\d{2})$/i)
+  const mmmYY = s.match(/^([a-z]{3})[ -](\d{2})$/i)
   if (mmmYY) {
     const mStr = mmmYY[1].toLowerCase()
     const yy = parseInt(mmmYY[2], 10)
@@ -146,7 +146,7 @@ function shouldContractProducePlan(
   const freq = ct.frequency?.trim() ?? ''
   if (freq === 'monthly') return true
   if (freq === 'quarterly') return [1, 4, 7, 10].includes(targetM)
-  if (freq === 'half_year' || freq === 'half‑year') return [1, 7].includes(targetM)
+  if (freq === 'half_year' || freq === 'half-year') return [1, 7].includes(targetM)
   return false
 }
 
@@ -155,7 +155,7 @@ export default function BillContractMismatchPage() {
   const searchParams = useSearchParams()
   const isBoss = searchParams.get('isBoss') === 'true'
 
-  // ✅ 新增：最小筛选年份，默认2026
+  // 最小筛选年份，默认2026
   const [filterMinYear, setFilterMinYear] = useState<number>(2026)
 
   const [loading, setLoading] = useState(false)
@@ -211,7 +211,7 @@ export default function BillContractMismatchPage() {
       if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) return
 
       const rawYStart = startD.getFullYear()
-      const yStart = Math.max(rawYStart, filterMinYear) // 方案A：限制最小年份
+      const yStart = Math.max(rawYStart, filterMinYear)
       const yEnd = endD.getFullYear()
       if(yStart > yEnd) return
 
@@ -239,14 +239,13 @@ export default function BillContractMismatchPage() {
       const { year: refY, month: refM } = getBillYearMonth(bill)
 
       if (!bName || !srv || !refY || !refM) {
-        console.log('Bill skipped', bill.id, {
+        console.log('❌ Bill skipped', bill.id, {
           bName, srv, refY, refM,
           scheduleRefRaw: bill.schedule_month_ref,
           monthRaw: bill.month
         })
         return
       }
-      // ✅ 工单过滤：小于筛选年份直接跳过
       if(refY < filterMinYear) return
 
       const ymStr = `${refY}-${String(refM).padStart(2, '0')}`
@@ -277,31 +276,31 @@ export default function BillContractMismatchPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex flex-wrap justify-between items-center mb-6 gap‑3">
+      <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
         <div>
-          <h1 className="text-xl font-bold">CONTRACT Bills vs Contract‑Branch Mismatch Check</h1>
+          <h1 className="text-xl font-bold">CONTRACT Bills vs Contract-Branch Mismatch Check</h1>
           <p className="text-sm text-gray-500">
-            Find CONTRACT maintenance bills which CANNOT match any active contract‑branch plan.
+            Find CONTRACT maintenance bills which CANNOT match any active contract-branch plan.
           </p>
-          <div className="mt-2 p-2 bg-slate-100 rounded text-xs font‑mono">
+          <div className="mt-2 p-2 bg-slate-100 rounded text-xs font-mono">
             Filter Min Year: {filterMinYear} |
             raw bills from DB: {rawAllBills.length} |
             filtered contract bills: {contractBills.length} |
             parsed valid bill items: {billMatchList.length} |
-            <span className="text‑green‑600"> Matched: {matchedList.length}</span> |
-            <span className="text‑red‑600"> Mismatch(Extra Bill): {mismatchList.length}</span>
+            <span className="text-green-600"> Matched: {matchedList.length}</span> |
+            <span className="text-red-600"> Mismatch(Extra Bill): {mismatchList.length}</span>
           </div>
         </div>
-        <button onClick={() => router.back()} className="px‑4 py‑2 border rounded hover:bg‑gray‑100">← Back</button>
+        <button onClick={() => router.back()} className="px-4 py-2 border rounded hover:bg-gray-100">← Back</button>
       </div>
 
-      {/* ✅ 年份筛选下拉框 */}
-      <div className="flex items-center gap‑3 mb‑4">
-        <label className="text‑sm font‑medium">Minimum Check Year:</label>
+      {/* 年份筛选下拉框 */}
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-sm font-medium">Minimum Check Year:</label>
         <select
           value={filterMinYear}
           onChange={(e) => setFilterMinYear(Number(e.target.value))}
-          className="border px‑2 py‑1 rounded text‑sm"
+          className="border px-2 py-1 rounded text-sm"
         >
           <option value={2024}>2024</option>
           <option value={2025}>2025</option>
@@ -314,44 +313,44 @@ export default function BillContractMismatchPage() {
         <button
           onClick={loadData}
           disabled={loading}
-          className="bg‑red‑600 text‑white px‑5 py‑2 rounded hover:bg‑red‑700 disabled:opacity‑50"
+          className="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 disabled:opacity-50"
         >
           {loading ? 'Loading…' : 'Reload Contract & CONTRACT Bills'}
         </button>
       </div>
 
-      <div className="mb‑8">
-        <h2 className="text‑lg font‑semibold mb‑2 text‑red‑600">⚠️ Mismatch Bills (No corresponding active contract plan found)</h2>
-        <div className="overflow‑x‑auto border rounded">
-          <table className="min‑w‑full text‑sm border‑collapse">
-            <thead className="bg‑red‑50 text‑red‑800">
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold mb-2 text-red-600">⚠️ Mismatch Bills (No corresponding active contract plan found)</h2>
+        <div className="overflow-x-auto border rounded">
+          <table className="min-w-full text-sm border-collapse">
+            <thead className="bg-red-50 text-red-800">
               <tr>
-                <th className="p‑2 text‑left">Bill Id</th>
-                <th className="p‑2 text‑left">Branch Name</th>
-                <th className="p‑2 text‑left">Service Type</th>
-                <th className="p‑2 text‑left">Doc No</th>
-                <th className="p‑2 text‑left">Bill Date</th>
-                <th className="p‑2 text‑left">Schedule Ref / Month</th>
-                <th className="p‑2 text‑left">Match‑Key</th>
-                <th className="p‑2 text‑left">Amount</th>
-                <th className="p‑2 text‑left">Description</th>
+                <th className="p-2 text-left">Bill Id</th>
+                <th className="p-2 text-left">Branch Name</th>
+                <th className="p-2 text-left">Service Type</th>
+                <th className="p-2 text-left">Doc No</th>
+                <th className="p-2 text-left">Bill Date</th>
+                <th className="p-2 text-left">Schedule Ref / Month</th>
+                <th className="p-2 text-left">Match-Key</th>
+                <th className="p-2 text-left">Amount</th>
+                <th className="p-2 text-left">Description</th>
               </tr>
             </thead>
             <tbody>
               {mismatchList.length === 0 ? (
-                <tr><td colSpan={9} className="p‑4 text‑center text‑gray‑400">No mismatch extra CONTRACT bills found</td></tr>
+                <tr><td colSpan={9} className="p-4 text-center text-gray-400">No mismatch extra CONTRACT bills found</td></tr>
               ) : (
                 mismatchList.map((item) => (
-                  <tr key={Number(item.billId)} className="bg‑white">
-                    <td className="p‑2">{String(item.billId)}</td>
-                    <td className="p‑2">{item.branchName ?? '-'}</td>
-                    <td className="p‑2 font‑semibold">{item.serviceType ?? '-'}</td>
-                    <td className="p‑2">{item.docNo ?? '-'}</td>
-                    <td className="p‑2">{item.billDate ?? '-'}</td>
-                    <td className="p‑2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
-                    <td className="p‑2 font‑mono text‑xs">{item.matchKey}</td>
-                    <td className="p‑2">{item.total ?? '-'}</td>
-                    <td className="p‑2 max‑w‑52 truncate">{item.description ?? '-'}</td>
+                  <tr key={Number(item.billId)} className="bg-white">
+                    <td className="p-2">{String(item.billId)}</td>
+                    <td className="p-2">{item.branchName ?? '-'}</td>
+                    <td className="p-2 font-semibold">{item.serviceType ?? '-'}</td>
+                    <td className="p-2">{item.docNo ?? '-'}</td>
+                    <td className="p-2">{item.billDate ?? '-'}</td>
+                    <td className="p-2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
+                    <td className="p-2 font-mono text-xs">{item.matchKey}</td>
+                    <td className="p-2">{item.total ?? '-'}</td>
+                    <td className="p-2 max-w-52 truncate">{item.description ?? '-'}</td>
                   </tr>
                 ))
               )}
@@ -361,31 +360,31 @@ export default function BillContractMismatchPage() {
       </div>
 
       <div>
-        <h2 className="text‑lg font‑semibold mb‑2 text‑green‑700">✅ Matched Bills (Has corresponding contract‑branch plan)</h2>
-        <div className="overflow‑x‑auto border rounded">
-          <table className="min‑w‑full text‑sm border‑collapse">
-            <thead className="bg‑green‑50 text‑green‑800">
+        <h2 className="text-lg font-semibold mb-2 text-green-700">✅ Matched Bills (Has corresponding contract-branch plan)</h2>
+        <div className="overflow-x-auto border rounded">
+          <table className="min-w-full text-sm border-collapse">
+            <thead className="bg-green-50 text-green-800">
               <tr>
-                <th className="p‑2 text‑left">Bill Id</th>
-                <th className="p‑2 text‑left">Branch Name</th>
-                <th className="p‑2 text‑left">Service Type</th>
-                <th className="p‑2 text‑left">Doc No</th>
-                <th className="p‑2 text‑left">Schedule Ref / Month</th>
-                <th className="p‑2 text‑left">Match‑Key</th>
+                <th className="p-2 text-left">Bill Id</th>
+                <th className="p-2 text-left">Branch Name</th>
+                <th className="p-2 text-left">Service Type</th>
+                <th className="p-2 text-left">Doc No</th>
+                <th className="p-2 text-left">Schedule Ref / Month</th>
+                <th className="p-2 text-left">Match-Key</th>
               </tr>
             </thead>
             <tbody>
               {matchedList.length === 0 ? (
-                <tr><td colSpan={6} className="p‑4 text‑center text‑gray‑400">No matched bills</td></tr>
+                <tr><td colSpan={6} className="p-4 text-center text-gray-400">No matched bills</td></tr>
               ) : (
                 matchedList.map((item) => (
-                  <tr key={Number(item.billId)} className="bg‑white">
-                    <td className="p‑2">{String(item.billId)}</td>
-                    <td className="p‑2">{item.branchName ?? '-'}</td>
-                    <td className="p‑2 font‑semibold">{item.serviceType ?? '-'}</td>
-                    <td className="p‑2">{item.docNo ?? '-'}</td>
-                    <td className="p‑2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
-                    <td className="p‑2 font‑mono text‑xs">{item.matchKey}</td>
+                  <tr key={Number(item.billId)} className="bg-white">
+                    <td className="p-2">{String(item.billId)}</td>
+                    <td className="p-2">{item.branchName ?? '-'}</td>
+                    <td className="p-2 font-semibold">{item.serviceType ?? '-'}</td>
+                    <td className="p-2">{item.docNo ?? '-'}</td>
+                    <td className="p-2">{item.scheduleRef ?? item.monthRaw ?? '-'}</td>
+                    <td className="p-2 font-mono text-xs">{item.matchKey}</td>
                   </tr>
                 ))
               )}
