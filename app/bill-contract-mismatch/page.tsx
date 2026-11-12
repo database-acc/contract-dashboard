@@ -182,7 +182,17 @@ export default function BillContractMismatchPage() {
   const contractBills = useMemo(() => {
     return rawAllBills.filter(b => {
       if (!b.project) return false
-      if (!b.project.toUpperCase().includes('CONTRACT')) return false
+      const projUpper = b.project.toUpperCase()
+
+      // 👉 CONTRACT：直接纳入
+      const isContract = projUpper.includes('CONTRACT')
+      // 👉 WARRANTY：必须 schedule_month_ref 以及 service_type 都不为空才纳入
+      const isWarranty = projUpper.includes('WARRANTY')
+      if (isWarranty) {
+        if (!b.schedule_month_ref || !b.service_type) return false
+      }
+
+      if (!isContract && !isWarranty) return false
 
       const refRaw = b.schedule_month_ref ?? b.month
       const parseRes = parseBillMonth(refRaw)
@@ -256,8 +266,13 @@ export default function BillContractMismatchPage() {
         console.log('🧾 Bill', bill.id, 'keys:', computedKeys)
       }
 
+      // 标记项目类型
+      const projUpper = bill.project?.toUpperCase() ?? ''
+      const projectType = projUpper.includes('WARRANTY') ? 'WARRANTY' : 'CONTRACT'
+
       return {
         ...bill,
+        projectType,
         computedKeys,
         anyMatched,
       }
@@ -280,9 +295,9 @@ export default function BillContractMismatchPage() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-slate-900">CONTRACT Bills vs Contract Plan Checker</h1>
+                <h1 className="text-xl font-semibold text-slate-900">CONTRACT & WARRANTY Bills vs Contract Plan Checker</h1>
                 <p className="mt-0.5 text-sm text-slate-500">
-                  View all CONTRACT bills and check which ones have no matching active contract plan.
+                  View CONTRACT bills + valid WARRANTY bills and check which ones have no matching active contract plan.
                 </p>
               </div>
             </div>
@@ -306,7 +321,7 @@ export default function BillContractMismatchPage() {
             <div className="mt-1 text-2xl font-semibold text-slate-900">{rawAllBills.length}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered CONTRACT Bills ({filterYear})</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered Bills ({filterYear})</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{contractBills.length}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-emerald-200">
@@ -380,6 +395,7 @@ export default function BillContractMismatchPage() {
                   <th className="whitespace-nowrap px-4 py-3">Bill Id</th>
                   <th className="whitespace-nowrap px-4 py-3">Branch Name</th>
                   <th className="whitespace-nowrap px-4 py-3">Service Type</th>
+                  <th className="whitespace-nowrap px-4 py-3">Project Type</th>
                   <th className="whitespace-nowrap px-4 py-3">Project</th>
                   <th className="whitespace-nowrap px-4 py-3">Schedule Month Ref</th>
                   <th className="whitespace-nowrap px-4 py-3">Month</th>
@@ -404,6 +420,15 @@ export default function BillContractMismatchPage() {
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${
+                        row.projectType === 'WARRANTY'
+                          ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                          : 'bg-sky-50 text-sky-700 ring-sky-200'
+                      }`}>
+                        {row.projectType}
+                      </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-slate-600">{row.project ?? '-'}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">{row.schedule_month_ref ?? '-'}</td>
@@ -474,8 +499,8 @@ export default function BillContractMismatchPage() {
 
                 {billRowsWithCalc.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-4 py-16 text-center text-sm text-slate-500">
-                      No CONTRACT bills found for selected year.
+                    <td colSpan={13} className="px-4 py-16 text-center text-sm text-slate-500">
+                      No CONTRACT / valid WARRANTY bills found for selected year.
                     </td>
                   </tr>
                 )}
@@ -489,9 +514,11 @@ export default function BillContractMismatchPage() {
           <p className="font-medium text-slate-700">How to use</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             <li>Select Year: only show bills whose schedule month is exactly this year.</li>
+            <li><strong>CONTRACT</strong>: Any project containing CONTRACT will be included.</li>
+            <li><strong>WARRANTY</strong>: Only included when schedule_month_ref AND service_type are not empty.</li>
             <li><strong>Strict Match ON</strong> : exact string match (case, space, bracket sensitive)</li>
             <li><strong>Strict Match OFF</strong> : ignore case & extra space, easier to catch name mismatch</li>
-            <li><strong>No Plan Match</strong> means the CONTRACT bill could not be linked to any active contract-branch plan.</li>
+            <li><strong>No Plan Match</strong> means the bill could not be linked to any active contract-branch plan.</li>
             <li>Each computed key follows the format <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code>.</li>
           </ul>
         </div>
