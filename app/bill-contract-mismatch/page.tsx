@@ -155,11 +155,25 @@ export default function BillContractMismatchPage() {
   const [strictMatch, setStrictMatch] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
   const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
+  const [rawBillTotalCount, setRawBillTotalCount] = useState<number | null>(null)
   const [contracts, setContracts] = useState<ContractBranchRow[]>([])
 
   const loadData = async () => {
     setLoading(true)
     try {
+      // 👉 单独查询总数量，head:true 不返回行，拿到真实总数
+      const { count: exactCount, error: countErr } = await supabase
+        .from('maintenance_bills')
+        .select('*', { count: 'exact', head: true })
+
+      if (countErr) {
+        console.warn('⚠️ Count query failed, fallback to array length', countErr)
+        setRawBillTotalCount(null)
+      } else {
+        setRawBillTotalCount(exactCount)
+      }
+
+      // 👉 原有明细读取（用于比对逻辑，保留原有1000limit）
       const { data: billData, error: billErr } = await supabase.from('maintenance_bills').select('*')
       if (billErr) throw billErr
 
@@ -281,6 +295,8 @@ export default function BillContractMismatchPage() {
 
   const matchedCount = billRowsWithCalc.filter(x => x.anyMatched).length
   const mismatchCount = billRowsWithCalc.filter(x => !x.anyMatched).length
+  // 优先使用精确count，count查询失败时兜底用数组长度
+  const displayRawBillCount = rawBillTotalCount ?? rawAllBills.length
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
@@ -318,7 +334,7 @@ export default function BillContractMismatchPage() {
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Raw Bills</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{rawAllBills.length}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{displayRawBillCount}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered Bills ({filterYear})</div>
