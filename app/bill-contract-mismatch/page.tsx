@@ -66,6 +66,7 @@ function parseBillMonth(monthStr: string | null): ParseResult {
   const results: ParsedMonthItem[] = []
 
   for (const s of parts) {
+    // DD/MM/YYYY
     const dmy = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (dmy) {
       const m = parseInt(dmy[2], 10)
@@ -74,6 +75,7 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       continue
     }
 
+    // YYYY-MM
     const iso = s.match(/^(\d{4})-(\d{1,2})$/)
     if (iso) {
       const y = parseInt(iso[1], 10)
@@ -82,12 +84,23 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       continue
     }
 
-    const abbr = s.match(/^([A-Za-z]{3})-(\d{2})$/)
-    if (abbr) {
-      const mStr = abbr[1]
-      const yy = parseInt(abbr[2], 10)
+    // Jan-26 (2位年份)
+    const abbr2 = s.match(/^([A-Za-z]{3})[- ](\d{2})$/)
+    if (abbr2) {
+      const mStr = abbr2[1]
+      const yy = parseInt(abbr2[2], 10)
       const m = monthAbbrMap[mStr]
       if (m) results.push({ year: 2000 + yy, month: m })
+      continue
+    }
+
+    // Jan 2026 / Jan-2026 (4位年份，重点新增)
+    const abbr4 = s.match(/^([A-Za-z]{3})[- ](\d{4})$/)
+    if (abbr4) {
+      const mStr = abbr4[1]
+      const y = parseInt(abbr4[2], 10)
+      const m = monthAbbrMap[mStr]
+      if (m && y >= 2020) results.push({ year: y, month: m })
     }
   }
 
@@ -151,7 +164,7 @@ export default function BillContractMismatchPage() {
   const searchParams = useSearchParams()
   const isBoss = searchParams.get('isBoss') === 'true'
 
-  const [filterYear, setFilterYear] = useState<number>(2025)
+  const [filterYear, setFilterYear] = useState<number>(2026)
   const [strictMatch, setStrictMatch] = useState<boolean>(true)
   const [loading, setLoading] = useState(false)
   const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
