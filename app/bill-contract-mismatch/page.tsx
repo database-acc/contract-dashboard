@@ -172,7 +172,8 @@ export default function BillContractMismatchPage() {
       const { data: billData, error: billErr } = await supabase.from('maintenance_bills').select('*')
       if (billErr) throw billErr
 
-      const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('id, contract_no, branch_name, frequency, start_date, end_date, status, month_of_year').eq('status', 'active')
+      // 这里query 加上 description
+      const { data: ctData, error: ctErr } = await supabase.from('contract_branch').select('id, contract_no, branch_name, frequency, start_date, end_date, status, month_of_year, description').eq('status', 'active')
       if (ctErr) throw ctErr
 
       setRawAllBills(billData as MaintenanceBillRow[])
@@ -188,16 +189,15 @@ export default function BillContractMismatchPage() {
     loadData()
   }, [])
 
-  // 1. 【和Dashboard完全一样】构建计划Key集合：branch | service | yyyy-MM
+  // ========== 修改点：Plan key 从 contract.description 识别 service，不再读取 contract_no ==========
   const planKeySet = useMemo(() => {
     const set = new Set<string>()
     contracts.forEach(ct => {
       const bName = ct.branch_name?.trim()
-      if (!bName || !ct.contract_no) return
-      // Dashboard原版：只从 contract_no 拿service，**不fallback description！重点**
-      const parts = ct.contract_no.split('-')
-      const service = parts.length > 1 ? parts[1].trim() : ''
-      if (!['GWM', 'KPM', 'KPS', 'GTC'].includes(service)) return
+      if (!bName || !ct.description) return
+      // 用同样的getBillJobType拿service
+      const service = getBillJobType(ct.description, null)
+      if (!['GWM', 'KPM', 'KPS', 'GTC'].includes(service ?? '')) return
 
       // 遍历该年份12个月，判断是否排程
       for (let m = 1; m <= 12; m++) {
@@ -291,7 +291,7 @@ export default function BillContractMismatchPage() {
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">CONTRACT & WARRANTY Bills vs Contract Plan Checker</h1>
                 <p className="mt-0.5 text-sm text-slate-500">
-                  ✅ Logic fully aligned with DashboardStateWrapper. Same key rule: branch | service | yyyy-MM
+                  ✅ Logic updated: Plan service extracted from contract description
                 </p>
               </div>
             </div>
@@ -345,7 +345,7 @@ export default function BillContractMismatchPage() {
                 <option value={2028}>2028</option>
               </select>
             </div>
-            <span className="text-sm text-slate-500">Strict Match ON (same as Dashboard, no loose mode)</span>
+            <span className="text-sm text-slate-500">Strict Match ON</span>
           </div>
 
           <button
@@ -480,13 +480,13 @@ export default function BillContractMismatchPage() {
 
         {/* Footer note */}
         <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-700">Important: This checker uses <strong>exactly the same matching logic as DashboardStateWrapper</strong></p>
+          <p className="font-medium text-slate-700">Important: This checker now extract service from contract description</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            <li>Plan key source: contract_no second segment (GWM/KPM/KPS/GTC), NO fallback to description</li>
+            <li>Plan key source: contract.description → parse service (GWM/KPM/KPS/GTC)</li>
             <li>Bill key source: branch_name + service_type (auto parse from description if empty) + ref month (schedule_month_ref / month)</li>
-            <li>WARRANTY rule: schedule_month_ref AND service_type must not empty, same as Dashboard</li>
+            <li>WARRANTY rule: schedule_month_ref AND service_type must not empty</li>
             <li>Key format: <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code></li>
-            <li>No loose / case-insensitive mode, remove strictMatch toggle</li>
+            <li>No loose / case-insensitive mode</li>
           </ul>
         </div>
       </div>
