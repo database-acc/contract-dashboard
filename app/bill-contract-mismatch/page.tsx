@@ -47,6 +47,24 @@ type BillMatchItem = {
   isMatched: boolean
 }
 
+// 和dashboard复用：根据description自动识别service_type
+function getBillJobType(descRaw: string | null, total: number | null): string | null {
+  if (!descRaw) return null
+  const d = descRaw.trim().toUpperCase()
+  if (d.includes('KITCHEN PIPELINE MANAGEMENT')) return 'KPM'
+  if (d.includes('GREASE WASTE MANAGEMENT')) return 'GWM'
+  if (d.includes('PLUMBING')) {
+    if (total && total >= 1500) {
+      return 'KPM'
+    } else {
+      return 'KPS'
+    }
+  }
+  if (d.includes('KITCHEN PIPELINE SERVICE')) return 'KPS'
+  if (d.includes('GREASE TRAP CLEARANCE')) return 'GTC'
+  return null
+}
+
 // 复用：解析 schedule_month_ref
 type ParseRefResult = {
   year: number | null
@@ -86,7 +104,7 @@ function extractServiceFromContractNo(no: string | null | undefined): string | n
   return null
 }
 
-// 判断该 contract_branch 在指定年月是否生成计划（和data-checker完全相同逻辑）
+// 判断该 contract_branch 在指定年月是否生成计划（和data‑checker完全相同逻辑）
 function shouldContractProducePlan(
   ct: ContractBranchRow,
   targetY: number,
@@ -96,6 +114,7 @@ function shouldContractProducePlan(
   if (!ct.start_date || !ct.end_date) return false
   const startD = new Date(ct.start_date)
   const endD = new Date(ct.end_date)
+  if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) return false
   const targetD = new Date(targetY, targetM - 1, 10)
   if (targetD < startD || targetD > endD) return false
 
@@ -110,7 +129,7 @@ function shouldContractProducePlan(
   const freq = ct.frequency?.trim() ?? ''
   if (freq === 'monthly') return true
   if (freq === 'quarterly') return [1, 4, 7, 10].includes(targetM)
-  if (freq === 'half_year' || freq === 'half-year') return [1, 7].includes(targetM)
+  if (freq === 'half_year' || freq === 'half‑year') return [1, 7].includes(targetM)
   return false
 }
 
@@ -120,16 +139,16 @@ export default function BillContractMismatchPage() {
   const isBoss = searchParams.get('isBoss') === 'true'
 
   const [loading, setLoading] = useState(false)
-  const [bills, setBills] = useState<MaintenanceBillRow[]>([])
+  const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
   const [contracts, setContracts] = useState<ContractBranchRow[]>([])
 
   const loadData = async () => {
     setLoading(true)
     try {
+      // 全部拿回来，js过滤project包含contract，规避supabase ilike大小写坑
       const { data: billData, error: billErr } = await supabase
         .from('maintenance_bills')
         .select('*')
-        .ilike('project', '%CONTRACT%')
       if (billErr) throw billErr
 
       const { data: ctData, error: ctErr } = await supabase
@@ -138,8 +157,10 @@ export default function BillContractMismatchPage() {
         .eq('status', 'active')
       if (ctErr) throw ctErr
 
-      setBills(billData as MaintenanceBillRow[])
+      setRawAllBills(billData as MaintenanceBillRow[])
       setContracts(ctData as ContractBranchRow[])
+      console.log('原始全部bills:', billData)
+      console.log('active合约:', ctData)
     } catch (e) {
       console.error(e)
     } finally {
@@ -152,16 +173,29 @@ export default function BillContractMismatchPage() {
     loadData()
   }, [])
 
-  // 构建合约匹配map key = `${branch}|${service}|${yyyy-MM}`
+  // JS层过滤：project包含contract，忽略大小写、前后空格
+  const contractBills = useMemo(() => {
+    return rawAllBills.filter(bill => {
+      if (!bill.project) return false
+      const p = bill.project.trim().toLowerCase()
+      return p.includes('contract')
+    })
+  }, [rawAllBills])
+
+  // 构建合约匹配map key = `${branch}|${service}|${yyyy‑MM}`
   const contractPlanKeySet = useMemo(() => {
     const keySet = new Set<string>()
     contracts.forEach(ct => {
       const bName = ct.branch_name
       const srv = extractServiceFromContractNo(ct.contract_no)
       if (!bName || !srv) return
-      // 遍历1‑12月，生成该合约所有会产出计划的key
-      const yStart = new Date(ct.start_date!).getFullYear()
-      const yEnd = new Date(ct.end_date!).getFullYear()
+      if (!ct.start_date || !ct.end_date) return
+      const startD = new Date(ct.start_date)
+      const endD = new Date(ct.end_date)
+      if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime())) return
+
+      const yStart = startD.getFullYear()
+      const yEnd = endD.getFullYear()
       for (let y = yStart; y <= yEnd; y++) {
         for (let m = 1; m <= 12; m++) {
           if (shouldContractProducePlan(ct, y, m)) {
@@ -177,11 +211,17 @@ export default function BillContractMismatchPage() {
 
   const billMatchList: BillMatchItem[] = useMemo(() => {
     const res: BillMatchItem[] = []
-    bills.forEach(bill => {
+    contractBills.forEach(bill => {
       const bName = bill.branch_name
-      const srv = bill.service_type
+      // 如果service_type为空，复用dashboard逻辑从description推导
+      let srv = bill.service_type
+      if (!srv) {
+        srv = getBillJobType(bill.description, bill.total)
+      }
       const { year: refY, month: refM } = parseScheduleRef(bill.schedule_month_ref)
-      if (!bName || !srv || !refY || !refM) return
+      if (!bName || !srv || !refY || !refM) {
+        return
+      }
 
       const ymStr = `${refY}-${String(refM).padStart(2, '0')}`
       const matchKey = `${bName.trim()}|${srv}|${ymStr}`
@@ -203,7 +243,7 @@ export default function BillContractMismatchPage() {
       })
     })
     return res
-  }, [bills, contractPlanKeySet])
+  }, [contractBills, contractPlanKeySet])
 
   const mismatchList = billMatchList.filter(x => !x.isMatched)
   const matchedList = billMatchList.filter(x => x.isMatched)
@@ -215,11 +255,15 @@ export default function BillContractMismatchPage() {
           <h1 className="text-xl font-bold">CONTRACT Bills vs Contract‑Branch Mismatch Check</h1>
           <p className="text-sm text-gray-500">
             Find CONTRACT maintenance bills which CANNOT match any active contract‑branch plan.
-            <br />
-            Total CONTRACT bills parsed: {billMatchList.length} |
+          </p>
+          {/* ✅ 调试统计面板 */}
+          <div className="mt-2 p-2 bg-slate-100 rounded text-xs font-mono">
+            raw bills from DB: {rawAllBills.length} |
+            filtered contract bills: {contractBills.length} |
+            parsed valid bill items: {billMatchList.length} |
             <span className="text-green-600"> Matched: {matchedList.length}</span> |
             <span className="text-red-600"> Mismatch(Extra Bill): {mismatchList.length}</span>
-          </p>
+          </div>
         </div>
         <button onClick={() => router.back()} className="px-4 py-2 border rounded hover:bg-gray-100">← Back</button>
       </div>
