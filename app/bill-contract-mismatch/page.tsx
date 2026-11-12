@@ -151,7 +151,7 @@ export default function BillContractMismatchPage() {
   const searchParams = useSearchParams()
   const isBoss = searchParams.get('isBoss') === 'true'
 
-  const [filterMinYear, setFilterMinYear] = useState<number>(2026)
+  const [filterYear, setFilterYear] = useState<number>(2025)
   const [loading, setLoading] = useState(false)
   const [rawAllBills, setRawAllBills] = useState<MaintenanceBillRow[]>([])
   const [contracts, setContracts] = useState<ContractBranchRow[]>([])
@@ -185,9 +185,10 @@ export default function BillContractMismatchPage() {
 
       const refRaw = b.schedule_month_ref ?? b.month
       const parseRes = parseBillMonth(refRaw)
-      return parseRes.list.some(item => item.year >= filterMinYear)
+      // ✅ 改成严格等于选中年份，不再 >=
+      return parseRes.list.some(item => item.year === filterYear)
     })
-  }, [rawAllBills, filterMinYear])
+  }, [rawAllBills, filterYear])
 
   const contractPlanKeySet = useMemo(() => {
     const ks = new Set<string>()
@@ -200,8 +201,8 @@ export default function BillContractMismatchPage() {
       const eD = new Date(ct.end_date)
       if (Number.isNaN(sD.getTime()) || Number.isNaN(eD.getTime())) return
 
-      const yStart = Math.max(sD.getFullYear(), filterMinYear)
-      const yEnd = eD.getFullYear()
+      const yStart = Math.max(sD.getFullYear(), filterYear)
+      const yEnd = Math.min(eD.getFullYear(), filterYear)
       if (yStart > yEnd) return
 
       for (let y = yStart; y <= yEnd; y++) {
@@ -214,7 +215,7 @@ export default function BillContractMismatchPage() {
       }
     })
     return ks
-  }, [contracts, filterMinYear])
+  }, [contracts, filterYear])
 
   const billRowsWithCalc = useMemo(() => {
     return contractBills.map(bill => {
@@ -228,6 +229,8 @@ export default function BillContractMismatchPage() {
 
       const computedKeys: { key: string; isMatched: boolean }[] = []
       for (const item of parseRes.list) {
+        // 只生成本年份的匹配key
+        if (item.year !== filterYear) continue
         for (const s of jobList) {
           const ymStr = `${item.year}-${String(item.month).padStart(2, '0')}`
           const k = `${bName}|${s}|${ymStr}`
@@ -243,7 +246,7 @@ export default function BillContractMismatchPage() {
         anyMatched,
       }
     })
-  }, [contractBills, contractPlanKeySet])
+  }, [contractBills, contractPlanKeySet, filterYear])
 
   const matchedCount = billRowsWithCalc.filter(x => x.anyMatched).length
   const mismatchCount = billRowsWithCalc.filter(x => !x.anyMatched).length
@@ -287,7 +290,7 @@ export default function BillContractMismatchPage() {
             <div className="mt-1 text-2xl font-semibold text-slate-900">{rawAllBills.length}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered CONTRACT Bills</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Filtered CONTRACT Bills ({filterYear})</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{contractBills.length}</div>
           </div>
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-emerald-200">
@@ -303,10 +306,10 @@ export default function BillContractMismatchPage() {
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-slate-700">Minimum Check Year:</label>
+            <label className="text-sm font-medium text-slate-700">Select Year:</label>
             <select
-              value={filterMinYear}
-              onChange={e => setFilterMinYear(Number(e.target.value))}
+              value={filterYear}
+              onChange={e => setFilterYear(Number(e.target.value))}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
             >
               <option value={2024}>2024</option>
@@ -437,7 +440,7 @@ export default function BillContractMismatchPage() {
                 {billRowsWithCalc.length === 0 && (
                   <tr>
                     <td colSpan={11} className="px-4 py-16 text-center text-sm text-slate-500">
-                      No CONTRACT bills found for the selected minimum year.
+                      No CONTRACT bills found for selected year.
                     </td>
                   </tr>
                 )}
@@ -450,7 +453,7 @@ export default function BillContractMismatchPage() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-700">How to use</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            <li>Use <strong>Minimum Check Year</strong> to hide older bills and focus on future data.</li>
+            <li>Select Year: only show bills whose schedule month is exactly this year.</li>
             <li><strong>No Plan Match</strong> means the CONTRACT bill could not be linked to any active contract-branch plan.</li>
             <li>Each computed key follows the format <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code>.</li>
           </ul>
