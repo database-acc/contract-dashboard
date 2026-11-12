@@ -156,13 +156,19 @@ export default function BillContractMismatchPage() {
     loadData()
   },[])
 
-  // 只拿 project 包含 CONTRACT 的工单
+  // 1. 只拿 project 包含 CONTRACT + 年月 >= filterMinYear
   const contractBills = useMemo(()=>{
     return rawAllBills.filter(b=>{
       if(!b.project) return false
-      return b.project.toUpperCase().includes('CONTRACT')
+      if(!b.project.toUpperCase().includes('CONTRACT')) return false
+
+      const refRaw = b.schedule_month_ref ?? b.month
+      const parseRes = parseBillMonth(refRaw)
+      // 只要其中一个月份 >= 选择年份，这条工单才保留
+      const hasValidYear = parseRes.list.some(item => item.year >= filterMinYear)
+      return hasValidYear
     })
-  },[rawAllBills])
+  },[rawAllBills, filterMinYear])
 
   // 合约全部计划key集合
   const contractPlanKeySet = useMemo(()=>{
@@ -202,7 +208,6 @@ export default function BillContractMismatchPage() {
       // 生成多条key（多服务+多月份），存数组
       const computedKeys:{key:string;isMatched:boolean}[]=[]
       for(const item of parseRes.list){
-        if(item.year<filterMinYear) continue
         for(const s of jobList){
           const ymStr=`${item.year}-${String(item.month).padStart(2,'0')}`
           const k=`${bName}|${s}|${ymStr}`
@@ -228,7 +233,7 @@ export default function BillContractMismatchPage() {
             All project=CONTRACT bills. Column "Is‑Any‑Matched": ❌ = no contract plan match (your target data)
           </p>
           <div className="mt‑2 p‑2 bg‑slate‑100 rounded text‑xs font‑mono">
-            Min Year:{filterMinYear} | raw:{rawAllBills.length} | contract‑project bills:{contractBills.length}
+            Min Year:{filterMinYear} | raw:{rawAllBills.length} | filtered contract bills:{contractBills.length}
           </div>
         </div>
         <button onClick={()=>router.back()} className="px‑4 py‑2 border rounded hover:bg‑gray‑100">← Back</button>
