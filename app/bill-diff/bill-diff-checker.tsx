@@ -48,7 +48,7 @@ type DiffItem = {
   diffMap: Record<string, { oldVal: string; newVal: string }>
 }
 
-// 内置CSV解析，不依赖csv-parse
+// 内置CSV解析
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
   if (lines.length === 0) return []
@@ -91,25 +91,42 @@ export default function BillDiffChecker() {
   const [detailItem, setDetailItem] = useState<DiffItem | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 👉 分页拉取全部数据（解决1000行限制）
   const loadDB = async () => {
-    const { data, error } = await supabase
-      .from('maintenance_bills')
-      .select('area_code,month,doc_no,bill_date,company_name,description,agent,area,project,total,branch_name,schedule_month_ref,service_type')
-    if (error) {
-      alert(error.message)
-      return
+    const PAGE_SIZE = 1000
+    let allData: BillRow[] = []
+    let from = 0
+    let fetchMore = true
+
+    while (fetchMore) {
+      const { data, error } = await supabase
+        .from('maintenance_bills')
+        .select('area_code,month,doc_no,bill_date,company_name,description,agent,area,project,total,branch_name,schedule_month_ref,service_type')
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+      if (!data || data.length === 0) {
+        fetchMore = false
+      } else {
+        allData = [...allData, ...(data as BillRow[])]
+        from += PAGE_SIZE
+      }
     }
-    const list = (data ?? []) as BillRow[]
-    console.log('DB Bills loaded, total:', list.length)
-    console.log('DB month sample:', list.slice(0,10).map(x => x.month))
-    setDbBills(list)
+
+    setDbBills(allData)
+    console.log('✅ DB Bills loaded ALL, total:', allData.length)
+    console.log('DB month sample:', allData.slice(0,15).map(x => x.month))
   }
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (evt) => {
+    reader.onload = evt => {
       const text = evt.target?.result as string
       const records = parseCSV(text)
       const parsed: BillRow[] = records.map(r => ({
@@ -127,9 +144,8 @@ export default function BillDiffChecker() {
         schedule_month_ref: r.schedule_month_ref ?? null,
         service_type: r.service_type ?? null
       }))
-      console.log('CSV Bills loaded, total:', parsed.length)
-      console.log('CSV month sample:', parsed.slice(0,10).map(x => x.month))
       setCsvBills(parsed)
+      console.log('CSV loaded total:', parsed.length)
     }
     reader.readAsText(file)
   }
@@ -152,42 +168,36 @@ export default function BillDiffChecker() {
       const newRow = csvMap.get(docNo)
       const diffMap: Record<string, { oldVal: string; newVal: string }> = {}
       const changedFields: string[] = []
+      let status: DiffItem['status'] = 'same'
 
       if (!old && newRow) {
-        result.push({ doc_no: docNo, status: 'added', new: newRow, changedFields: [], diffMap })
-        continue
-      }
-      if (old && !newRow) {
-        result.push({ doc_no: docNo, status: 'removed', old, changedFields: [], diffMap })
-        continue
+        status = 'added'
+      } else if (old && !newRow) {
+        status = 'removed'
+      } else if (old && newRow) {
+        for (const field of COMPARE_FIELDS) {
+          const o = old[field] ?? ''
+          const n = newRow[field] ?? ''
+          if (String(o).trim() !== String(n).trim()) {
+            changedFields.push(field)
+            diffMap[field] = { oldVal: String(o), newVal: String(n) }
+          }
+        }
+        if (changedFields.length > 0) status = 'modified'
       }
 
-      for (const field of COMPARE_FIELDS) {
-        const o = old![field] ?? ''
-        const n = newRow![field] ?? ''
-        if (String(o).trim() !== String(n).trim()) {
-          changedFields.push(field)
-          diffMap[field] = { oldVal: String(o), newVal: String(n) }
-        }
-      }
-      if (changedFields.length > 0) {
-        result.push({ doc_no: docNo, status: 'modified', old, new: newRow, changedFields, diffMap })
-      } else {
-        result.push({ doc_no: docNo, status: 'same', old, new: newRow, changedFields: [], diffMap })
-      }
+      result.push({ doc_no: docNo, status, old, new: newRow, changedFields, diffMap })
     }
     return result
   }, [dbBills, csvBills])
 
   const filtered = useMemo(() => {
-    const res = diffList.filter(row => {
+    return diffList.filter(row => {
       if (yearFilter === 'All Year') return true
       const targetYear = yearFilter
       const billMonth = row.new?.month || row.old?.month || ''
       return billMonth.startsWith(targetYear)
     })
-    console.log('Filter year:', yearFilter, 'count:', res.length)
-    return res
   }, [diffList, yearFilter])
 
   const stats = useMemo(() => {
@@ -199,17 +209,22 @@ export default function BillDiffChecker() {
     return { total, added, removed, modified, same }
   }, [filtered])
 
-  const exportDiff = () => {
-    const lines = [
-      'doc_no,status,changed_fields,field,old_value,new_value'
-    ]
+  const displayRows = useMemo(() => {
+    if (showUnchanged) return filtered
+    return filtered.filter(i => i.status !== 'same')
+  }, [filtered, showUnchanged])
+
+  const exportDiffCSV = () => {
+    const header = ['doc_no','status','changedFields','old_value','new_value']
+    const lines: string[] = [header.join(',')]
     filtered.forEach(item => {
       if (item.status === 'modified') {
-        Object.entries(item.diffMap).forEach(([f, v]) => {
-          lines.push(`${item.doc_no},${item.status},${item.changedFields.join('|')},${f},"${v.oldVal}","${v.newVal}"`)
+        item.changedFields.forEach(f => {
+          const d = item.diffMap[f]
+          lines.push([item.doc_no, item.status, f, `"${d.oldVal}"`, `"${d.newVal}"`].join(','))
         })
       } else {
-        lines.push(`${item.doc_no},${item.status},,,,`)
+        lines.push([item.doc_no, item.status, '-', `"${item.old?.doc_no ?? ''}"`, `"${item.new?.doc_no ?? ''}"`].join(','))
       }
     })
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -218,9 +233,8 @@ export default function BillDiffChecker() {
     a.href = url
     a.download = 'bill_diff_result.csv'
     a.click()
+    URL.revokeObjectURL(url)
   }
-
-  const displayRows = showUnchanged ? filtered : filtered.filter(i => i.status !== 'same')
 
   const statusLabel: Record<string, string> = {
     added: 'ADDED',
@@ -231,7 +245,7 @@ export default function BillDiffChecker() {
   const statusColor: Record<string, string> = {
     added: '#dcfce7',
     removed: '#fee2e2',
-    modified: '#fff9cc',
+    modified: '#fffbeb',
     same: '#f1f5f9'
   }
 
@@ -242,9 +256,9 @@ export default function BillDiffChecker() {
         <button onClick={loadDB} style={{ padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6 }}>Load DB Current Bills</button>
         <button onClick={() => fileInputRef.current?.click()} style={{ padding: '8px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6 }}>Upload New CSV</button>
         <input ref={fileInputRef} type="file" accept=".csv" onChange={handleUpload} hidden />
-        <button onClick={exportDiff} style={{ padding: '8px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 6 }}>Export Diff CSV</button>
-        <label><input type="checkbox" checked={showUnchanged} onChange={(e) => setShowUnchanged(e.target.checked)} /> Show Unchanged</label>
-        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} style={{ padding: 6 }}>
+        <button onClick={exportDiffCSV} style={{ padding: '8px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 6 }}>Export Diff CSV</button>
+        <label><input type="checkbox" checked={showUnchanged} onChange={e => setShowUnchanged(e.target.checked)} /> Show Unchanged</label>
+        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} style={{ padding: 6 }}>
           <option>All Year</option>
           <option>2025</option>
           <option>2026</option>
@@ -252,7 +266,7 @@ export default function BillDiffChecker() {
         </select>
       </div>
 
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom:12 }}>
         Total: {stats.total} | ✅ Added: {stats.added} | ❌ Removed: {stats.removed} | 📝 Modified: {stats.modified} | ✔ Same: {stats.same}
         <br />
         Filtered Result Count: {displayRows.length}
@@ -274,7 +288,7 @@ export default function BillDiffChecker() {
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{statusLabel[row.status]}</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.changedFields.join(', ') || '-'}</td>
               <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                <button onClick={() => setDetailItem(row)} style={{ color: '#2563eb' }}>View Detail</button>
+                <button onClick={() => setDetailItem(row)} style={{ color: '#2563eb', border: 'none', background: 'none', cursor: 'pointer' }}>View Detail</button>
               </td>
             </tr>
           ))}
@@ -300,7 +314,7 @@ export default function BillDiffChecker() {
                   const newVal = detailItem.new?.[field] ?? '-'
                   const isDiff = detailItem.diffMap[field]
                   return (
-                    <tr key={field} style={{ background: isDiff ? '#fff9cc' : '#fff' }}>
+                    <tr key={field} style={{ background: isDiff ? '#fffbeb' : '#fff' }}>
                       <td style={{ border: '1px solid #ccc', padding: 6 }}>{field}</td>
                       <td style={{ border: '1px solid #ccc', padding: 6 }}>{oldVal}</td>
                       <td style={{ border: '1px solid #ccc', padding: 6 }}>{newVal}</td>
