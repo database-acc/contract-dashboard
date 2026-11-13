@@ -254,7 +254,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
       const jobList = splitServiceTypes(rawJobStr)
       if (jobList.length === 0) return
 
-      const refYMString = bill.schedule_month_ref ?? bill.month
+      const refYMString = (bill.schedule_month_ref?.trim() || bill.month)
       const refParseRes = parseBillMonth(refYMString)
       const refYMList = refParseRes.list
       if (refYMList.length === 0) return
