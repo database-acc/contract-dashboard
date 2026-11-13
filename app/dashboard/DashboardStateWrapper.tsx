@@ -170,7 +170,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     alert('Export Excel function')
   }
 
-  // ✅ 移除isDoneEarly参数，蓝色虚线改用style内联实现
+  // ✅ 移除isDoneEarly参数，浅黄色虚线环
   const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean) => {
     let base = ''
     switch (job) {
@@ -633,9 +633,9 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                               const isEarly = item.earlyJobs.includes(job)
                               const isWarranty = info?.projectType === 'WARRANTY'
 
-                              // 蓝色虚线环行内样式
+                              // ✅ 修改：浅黄色虚线环，替换原来蓝色
                               const earlyRingStyle: React.CSSProperties = isEarly
-                                ? { boxShadow: '0 0 0 2px #60a5fa inset, 0 0 0 4px rgba(96,165,250,0.4)', borderStyle: 'dotted', borderWidth:'2px', borderColor:'#60a5fa' }
+                                ? { boxShadow: '0 0 0 2px #facc15 inset, 0 0 0 4px rgba(250,204,21,0.4)', borderStyle: 'dotted', borderWidth:'2px', borderColor:'#facc15' }
                                 : {}
 
                               return (
@@ -711,7 +711,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
             </tbody>
           </table>
         </div>
-        {/* 图例 */}
+        {/* 图例 ✅ 已经改好文字 */}
         <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
           <div className="font-semibold mb-2">Legend Notes:</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
@@ -724,12 +724,12 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
               <span>Solid red ring = Done (Late)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100" style={{boxShadow:'0 0 0 2px #60a5fa inset',border:'2px dotted #60a5fa'}}></span>
-              <span>Blue dotted ring = Done Early</span>
+              <span className="inline-block w-5 h-5 rounded-full bg-emerald-100" style={{boxShadow:'0 0 0 2px #facc15 inset',border:'2px dotted #facc15'}}></span>
+              <span>Light yellow dotted ring = Done Early</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 !text-amber-500 font-semibold text-xs">KPS</span>
-              <span>KPS Yellow text = Multiple jobs / months in one Bill</span>
+              <span>Yellow text = Multiple jobs / months in one Bill</span>
             </div>
           </div>
         </div>
