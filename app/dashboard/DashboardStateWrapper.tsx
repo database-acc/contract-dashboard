@@ -437,6 +437,14 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
             >
               Bill‑Contract Mismatch Check
             </a>
+            {/* ✅ 新增 Bill Diff Checker，只有Boss可见 */}
+            <a
+              href="/bill-diff"
+              onClick={() => setSideOpen(false)}
+              className="block mt-1 bg-amber-700 text-white px-3 py-2 rounded text-sm hover:bg-amber-800 transition-colors text-center mx-4"
+            >
+              Bill Diff Checker
+            </a>
           </>
         )}
 
