@@ -172,6 +172,13 @@ function isWorkInMonth(
 /* ================================================================== */
 
 const YEAR_OPTIONS = [2024, 2025, 2026, 2027, 2028]
+const PROJECT_OPTIONS = [
+  { value: 'all', label: 'All Projects' },
+  { value: 'NDO-CONTRACT', label: 'NDO-CONTRACT' },
+  { value: 'CBTL-CONTRACT', label: 'CBTL-CONTRACT' },
+  { value: 'TCA-CONTRACT', label: 'TCA-CONTRACT' },
+  { value: 'ZOK-CONTRACT', label: 'ZOK-CONTRACT' },
+]
 
 const REASON_META: Record<ReasonCode, { label: string; cls: string }> = {
   MATCHED: {
@@ -200,6 +207,7 @@ export default function BillContractMismatchPage() {
   const router = useRouter()
 
   const [planYear, setPlanYear] = useState<number>(2026)
+  const [selectedProject, setSelectedProject] = useState<string>('all')
   const [includeWarranty, setIncludeWarranty] = useState(false)
   const [mode, setMode] = useState<'unmatched' | 'matched' | 'all'>('unmatched')
   const [search, setSearch] = useState('')
@@ -457,11 +465,13 @@ export default function BillContractMismatchPage() {
     return c
   }, [analysis.rows])
 
-  /* ---------------- 过滤 + 排序 ---------------- */
+  /* ---------------- 过滤 + 排序（新增 Project 筛选） ---------------- */
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return analysis.rows
       .filter(r => {
+        // Project filter
+        if (selectedProject !== 'all' && r.project !== selectedProject) return false
         if (mode === 'unmatched' && r.matched) return false
         if (mode === 'matched' && !r.matched) return false
         if (!q) return true
@@ -477,7 +487,7 @@ export default function BillContractMismatchPage() {
         if (bn !== 0) return bn
         return (a.refMonthRaw ?? '').localeCompare(b.refMonthRaw ?? '')
       })
-  }, [analysis.rows, mode, search])
+  }, [analysis.rows, mode, search, selectedProject])
 
   const yearCoverage = useMemo(() => {
     const out: { year: number; rows: number; keys: number }[] = []
@@ -573,6 +583,20 @@ export default function BillContractMismatchPage() {
               >
                 {YEAR_OPTIONS.map(y => (
                   <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 新增 Project Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-700">Project:</label>
+              <select
+                value={selectedProject}
+                onChange={e => setSelectedProject(e.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+              >
+                {PROJECT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
             </div>
