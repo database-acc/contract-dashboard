@@ -211,10 +211,6 @@ export default function StaffSchedulePage() {
           <div className="text-center text-gray-400 py-4">Tap date (orange dot) to view jobs</div>
         )}
       </div>
-
-      <div className="mt-6 text-center">
-        <a href="/dashboard" className="text-sm text-blue-600 underline">← Back to Admin Dashboard</a>
-      </div>
     </div>
   )
 }
