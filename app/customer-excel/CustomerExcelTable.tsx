@@ -1,6 +1,5 @@
 'use client'
 import React, { useState, useMemo } from 'react'
-import { Workbook } from 'exceljs'
 import { useRouter } from 'next/navigation'
 import CustomerExcelTableFull from './CustomerExcelTableFull'
 import CustomerExcelTableSummary from './CustomerExcelTableSummary'
@@ -26,7 +25,20 @@ export default function CustomerExcelTable({ rawData }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>('full')
   const [selectedCustomer, setSelectedCustomer] = useState<string>("All")
   const [selectedService, setSelectedService] = useState<string>("all")
-  const customerList = ["All", "CBTL", "Nando's"]
+  const [isDownloading, setIsDownloading] = useState(false)
+
+  // 自动读取客户列表
+  const customerList = useMemo(() => {
+    const customerSet = new Set<string>()
+    customerSet.add("All")
+    rawData.forEach(row => {
+      if (row.branch_name) {
+        const prefix = row.branch_name.split(' ')[0]
+        if (prefix) customerSet.add(prefix)
+      }
+    })
+    return Array.from(customerSet)
+  }, [rawData])
 
   const yearFilteredData = useMemo(() => {
     return rawData.filter((row) => {
@@ -54,11 +66,258 @@ export default function CustomerExcelTable({ rawData }: Props) {
   const groupedRows = useAggregateOutletData(filteredData)
 
   const handleExport = async () => {
-    const workbook = new Workbook()
-    const sheet = workbook.addWorksheet(`${year}_Schedule`)
-    // 这里你原来的Excel导出逻辑，直接复制过来，按viewMode判断分支
-    // 你原来完整handleExport直接粘贴回来即可
-    // 分支判断：viewMode === 'full' / 'job-summary' / 'price'
+    setIsDownloading(true)
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet(`${year}_Schedule`)
+      sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 2 }]
+
+      // 修复：as const 解决BorderStyle类型
+      const borderAll = {
+        top: { style: 'thin' as const },
+        left: { style: 'thin' as const },
+        bottom: { style: 'thin' as const },
+        right: { style: 'thin' as const },
+      }
+      const styleHeader = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2E8F0' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { horizontal: 'center' as const, vertical: 'middle' as const }
+      }
+      const styleSubHeader = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F1F5F9' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { horizontal: 'center' as const, vertical: 'middle' as const }
+      }
+      const styleGroupRow = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2E8F0' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { vertical: 'middle' as const }
+      }
+      const styleSubTotal = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E0F2FE' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
+      }
+      const styleGrandTotal = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'BAE6FD' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
+      }
+      const styleCellRight = { border: borderAll, alignment: { horizontal: 'right' as const, vertical: 'middle' as const } }
+      const styleCellCenter = { border: borderAll, alignment: { horizontal: 'center' as const, vertical: 'middle' as const } }
+      const styleCellLeft = { border: borderAll, alignment: { horizontal: 'left' as const, vertical: 'middle' as const } }
+
+      if (viewMode === 'full') {
+        const colCount = 2 + monthList.length * 7 + 1
+        // 表头第一行
+        const headerRow1Data: (string | number)[] = ['NO', 'Outlet']
+        for (const m of monthList) headerRow1Data.push(m.label)
+        headerRow1Data.push('Overall Total')
+        const headerRow1 = sheet.addRow(headerRow1Data)
+        sheet.mergeCells(1, 3, 1, 2 + monthList.length * 7)
+        sheet.getCell(1, 1).style = styleHeader
+        sheet.getCell(1, 2).style = styleHeader
+        sheet.getCell(1, 3).style = styleHeader
+        sheet.getCell(1, colCount).style = styleHeader
+
+        // 表头第二行
+        const headerRow2Data: (string | number)[] = ['', '']
+        for (const m of monthList) {
+          headerRow2Data.push('KPS', 'KPM', 'GWM', 'GTC', 'Mid', 'Out', 'Subtotal')
+        }
+        headerRow2Data.push('')
+        const headerRow2 = sheet.addRow(headerRow2Data)
+        for (let c = 1; c <= colCount; c++) {
+          sheet.getCell(2, c).style = styleSubHeader
+        }
+
+        let currentGroup = ''
+        let no = 1
+        for (const r of groupedRows) {
+          if (r.group !== currentGroup) {
+            currentGroup = r.group
+            const groupRowData: (string | number)[] = [currentGroup, '']
+            const emptyCells = Array(colCount - 2).fill('')
+            groupRowData.push(...emptyCells)
+            const groupRow = sheet.addRow(groupRowData)
+            sheet.getRow(sheet.lastRow!.number).eachCell(c => c.style = styleGroupRow)
+            sheet.mergeCells(sheet.lastRow!.number, 3, sheet.lastRow!.number, colCount)
+          }
+          const rowData: (string | number)[] = [no++, r.branch_name ?? '-']
+          for (const m of monthList) {
+            const md = r.monthData[m.key]
+            const kps = md?.kps ?? 0
+            const kpm = md?.kpm ?? 0
+            const gwm = md?.gwm ?? 0
+            const gtc = md?.gtc ?? 0
+            const mid = md?.midnight ?? 0
+            const out = md?.outstation ?? 0
+            const sub = md?.totalPrice ?? 0
+            rowData.push(kps > 0 ? kps : '', kpm > 0 ? kpm : '', gwm > 0 ? gwm : '', gtc > 0 ? gtc : '', mid > 0 ? mid : '', out > 0 ? out : '', sub > 0 ? sub : '')
+          }
+          const yearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
+          rowData.push(yearTotal > 0 ? yearTotal : '')
+          const dataRow = sheet.addRow(rowData)
+
+          let ci = 1
+          sheet.getCell(dataRow.number, ci++).style = styleCellLeft
+          sheet.getCell(dataRow.number, ci++).style = styleCellLeft
+          for (const m of monthList) {
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleCellRight
+            sheet.getCell(dataRow.number, ci++).style = styleSubTotal
+          }
+          sheet.getCell(dataRow.number, ci++).style = styleSubTotal
+        }
+
+        // Grand Total
+        const totalRowData: (string | number)[] = ['TOTAL', '']
+        let grandTotalSum = 0
+        for (const m of monthList) {
+          let sumKPS = 0, sumKPM = 0, sumGWM = 0, sumGTC = 0, sumMid = 0, sumOut = 0, sumSub = 0
+          for (const r of groupedRows) {
+            const md = r.monthData[m.key]
+            sumKPS += md?.kps ?? 0
+            sumKPM += md?.kpm ?? 0
+            sumGWM += md?.gwm ?? 0
+            sumGTC += md?.gtc ?? 0
+            sumMid += md?.midnight ?? 0
+            sumOut += md?.outstation ?? 0
+            sumSub += md?.totalPrice ?? 0
+          }
+          grandTotalSum += sumSub
+          totalRowData.push(sumKPS > 0 ? sumKPS : '', sumKPM > 0 ? sumKPM : '', sumGWM > 0 ? sumGWM : '', sumGTC > 0 ? sumGTC : '', sumMid > 0 ? sumMid : '', sumOut > 0 ? sumOut : '', sumSub > 0 ? sumSub : '')
+        }
+        totalRowData.push(grandTotalSum > 0 ? grandTotalSum : '')
+        const grandRow = sheet.addRow(totalRowData)
+        sheet.getRow(grandRow.number).eachCell(c => c.style = styleGrandTotal)
+      } else if (viewMode === 'job-summary') {
+        const colCount = 2 + monthList.length
+        const headerRow1Data: (string | number)[] = ['NO', 'Outlet']
+        for (const m of monthList) headerRow1Data.push(m.label)
+        const headerRow1 = sheet.addRow(headerRow1Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(1, c).style = styleHeader
+
+        const headerRow2Data: (string | number)[] = ['', '']
+        for (const m of monthList) headerRow2Data.push('Service Type')
+        const headerRow2 = sheet.addRow(headerRow2Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(2, c).style = styleSubHeader
+
+        let currentGroup = ''
+        let no = 1
+        for (const r of groupedRows) {
+          if (r.group !== currentGroup) {
+            currentGroup = r.group
+            const groupRowData: (string | number)[] = [currentGroup, '']
+            const emptyCells = Array(colCount - 2).fill('')
+            groupRowData.push(...emptyCells)
+            const groupRow = sheet.addRow(groupRowData)
+            sheet.getRow(sheet.lastRow!.number).eachCell(c => c.style = styleGroupRow)
+            sheet.mergeCells(sheet.lastRow!.number, 3, sheet.lastRow!.number, colCount)
+          }
+          const rowData: (string | number)[] = [no++, r.branch_name ?? '-']
+          // 临时方案：从该Outlet所有合同提取唯一service type，避开serviceLabels不存在
+          const outletContracts = filteredData.filter(d => d.branch_name === r.branch_name)
+          const serviceSet = new Set<string>()
+          outletContracts.forEach(c => {
+            const st = getServiceType(c.contract_no)
+            if(st) serviceSet.add(st)
+          })
+          const serviceText = Array.from(serviceSet).join(' / ')
+          for (const m of monthList) {
+            rowData.push(serviceText)
+          }
+          const dataRow = sheet.addRow(rowData)
+          sheet.getCell(dataRow.number, 1).style = styleCellLeft
+          sheet.getCell(dataRow.number, 2).style = styleCellLeft
+          for (let c = 3; c <= colCount; c++) sheet.getCell(dataRow.number, c).style = styleCellCenter
+        }
+      } else if (viewMode === 'price') {
+        const colCount = 2 + monthList.length + 1
+        const headerRow1Data: (string | number)[] = ['NO', 'Outlet']
+        for (const m of monthList) headerRow1Data.push(m.label)
+        headerRow1Data.push('Overall Total')
+        const headerRow1 = sheet.addRow(headerRow1Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(1, c).style = styleHeader
+
+        const headerRow2Data: (string | number)[] = ['', '']
+        for (const m of monthList) headerRow2Data.push('Price')
+        headerRow2Data.push('')
+        const headerRow2 = sheet.addRow(headerRow2Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(2, c).style = styleSubHeader
+
+        let currentGroup = ''
+        let no = 1
+        for (const r of groupedRows) {
+          if (r.group !== currentGroup) {
+            currentGroup = r.group
+            const groupRowData: (string | number)[] = [currentGroup, '']
+            const emptyCells = Array(colCount - 2).fill('')
+            groupRowData.push(...emptyCells)
+            const groupRow = sheet.addRow(groupRowData)
+            sheet.getRow(sheet.lastRow!.number).eachCell(c => c.style = styleGroupRow)
+            sheet.mergeCells(sheet.lastRow!.number, 3, sheet.lastRow!.number, colCount)
+          }
+          const rowData: (string | number)[] = [no++, r.branch_name ?? '-']
+          for (const m of monthList) {
+            const md = r.monthData[m.key]
+            const price = md?.totalPrice ?? 0
+            rowData.push(price > 0 ? price : '')
+          }
+          const yearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
+          rowData.push(yearTotal > 0 ? yearTotal : '')
+          const dataRow = sheet.addRow(rowData)
+          sheet.getCell(dataRow.number, 1).style = styleCellLeft
+          sheet.getCell(dataRow.number, 2).style = styleCellLeft
+          for (let c = 3; c <= colCount; c++) sheet.getCell(dataRow.number, c).style = styleSubTotal
+        }
+
+        const totalRowData: (string | number)[] = ['OVERALL TOTAL', '']
+        let grandTotalSum = 0
+        for (const m of monthList) {
+          let sumSub = 0
+          for (const r of groupedRows) {
+            const md = r.monthData[m.key]
+            sumSub += md?.totalPrice ?? 0
+          }
+          grandTotalSum += sumSub
+          totalRowData.push(sumSub > 0 ? sumSub : '')
+        }
+        totalRowData.push(grandTotalSum > 0 ? grandTotalSum : '')
+        const grandRow = sheet.addRow(totalRowData)
+        sheet.getRow(grandRow.number).eachCell(c => c.style = styleGrandTotal)
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = URL.createObjectURL(blob)
+
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Customer_Schedule_Report_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Excel download error:', err)
+      alert('Excel生成失败，请打开F12控制台查看报错信息')
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   return (
@@ -131,9 +390,11 @@ export default function CustomerExcelTable({ rawData }: Props) {
           </button>
           <button
             onClick={handleExport}
-            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition h-10"
+            disabled={isDownloading}
+            className={`px-3 py-2 rounded text-sm transition h-10
+              ${isDownloading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
           >
-            Download Excel
+            {isDownloading ? 'Generating...' : 'Download Excel'}
           </button>
         </div>
       </div>
