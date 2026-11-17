@@ -13,7 +13,6 @@
   --nandos: #ffe9d8;
 }
 
-/* 👉 把 @theme inline 删掉，改用标准 tailwind 自定义颜色写法，消除 @theme 警告 */
 @theme {
   --color-cbtl: var(--cbtl);
   --color-nandos: var(--nandos);
@@ -37,7 +36,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 表格样式，去掉 @apply 就不会报 unknown at rule */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -107,4 +105,14 @@ th {
 }
 .dark .diff-same {
   background-color: #111827;
+}
+
+/* ✅ Branch Name 单元格：加粗、放大、黑色文字 */
+.branch-name-cell {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #000;
+}
+.dark .branch-name-cell {
+  color: #fff;
 }

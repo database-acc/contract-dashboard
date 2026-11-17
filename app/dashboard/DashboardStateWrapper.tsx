@@ -725,8 +725,8 @@ export default function DashboardStateWrapper({
                       }`}
                     >
                       <td className="border border-gray-200 px-3 py-2 text-gray-500">{idx + 1}</td>
-                      {/* ✅ Branch Name 强制纯黑色，不再被链接样式染蓝 */}
-                      <td className="border border-gray-200 px-3 py-2 font-medium text-black">
+                      {/* ✅ 修改：使用 branch-name-cell 样式，加粗放大 */}
+                      <td className="border border-gray-200 px-3 py-2 branch-name-cell">
                         {item.branch_name}
                       </td>
                       <td className="border border-gray-200 px-3 py-2">
