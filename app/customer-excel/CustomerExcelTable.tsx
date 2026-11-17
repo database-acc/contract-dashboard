@@ -70,7 +70,12 @@ export default function CustomerExcelTable({ rawData }: Props) {
     try {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
-      const sheet = workbook.addWorksheet(`${year}_Schedule`)
+
+      // ========== 动态sheet名 ==========
+      const serviceLabel = selectedService === 'all' ? 'All' : selectedService
+      const customerLabel = selectedCustomer === 'All' ? 'All' : selectedCustomer
+      const sheetName = `${serviceLabel} ${customerLabel} ${year}`
+      const sheet = workbook.addWorksheet(sheetName)
       sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 2 }]
 
       // 修复：as const 解决BorderStyle类型
@@ -307,7 +312,8 @@ export default function CustomerExcelTable({ rawData }: Props) {
 
       const a = document.createElement('a')
       a.href = url
-      a.download = `Customer_Schedule_Report_${year}.xlsx`
+      // ========== 动态文件名 ==========
+      a.download = `${serviceLabel}_${customerLabel}_Schedule_${year}.xlsx`
       document.body.appendChild(a)
       a.click()
       a.remove()
