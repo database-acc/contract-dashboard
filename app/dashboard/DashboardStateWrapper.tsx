@@ -2,6 +2,9 @@
 import { useState, useMemo, ReactNode, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import { DayPicker } from 'react-day-picker'
+import 'react-day-picker/dist/style.css'
+import { format } from 'date-fns'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -198,7 +201,7 @@ export default function DashboardStateWrapper({
   // ========== 新增：Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
   const [editingDocNo, setEditingDocNo] = useState<string | null>(null)
-  const [tempScheduleDate, setTempScheduleDate] = useState<string>("")
+  const [tempScheduleDate, setTempScheduleDate] = useState<Date | undefined>()
   const [savingDocNo, setSavingDocNo] = useState<string | null>(null)
 
   const loadScheduleAssign = useCallback(async () => {
@@ -221,14 +224,15 @@ export default function DashboardStateWrapper({
   }
 
   // 保存安排日期（upsert，只改 bill_schedule_assign，不动 bills）
-  const handleSaveScheduleDate = async (docNo: string, newDate: string) => {
+  const handleSaveScheduleDate = async (docNo: string, dateVal: Date | undefined) => {
     setSavingDocNo(docNo)
+    const dbDateStr = dateVal ? format(dateVal, 'yyyy-MM-dd') : null
     try {
       const { error } = await supabase
         .from("bill_schedule_assign")
         .upsert({
           doc_no: docNo,
-          schedule_date: newDate || null,
+          schedule_date: dbDateStr,
           editor_name: currentEditorName,
           editor_role: currentEditorRole,
           edited_at: new Date().toISOString()
@@ -240,7 +244,7 @@ export default function DashboardStateWrapper({
         const existIndex = prev.findIndex(x => x.doc_no === docNo)
         const newItem: BillScheduleAssignRow = {
           doc_no: docNo,
-          schedule_date: newDate || null,
+          schedule_date: dbDateStr,
           editor_name: currentEditorName,
           editor_role: currentEditorRole,
           edited_at: new Date().toISOString(),
@@ -267,7 +271,7 @@ export default function DashboardStateWrapper({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest("td") && !target.closest("input[type='date']")) {
+      if (!target.closest(".rdp") && !target.closest("[data-calendar-trigger]")) {
         setEditingDocNo(null)
       }
     }
@@ -755,19 +759,23 @@ export default function DashboardStateWrapper({
                           ))}
                         </div>
                       </td>
-                      {/* ========== 修改后的 Schedule Date 单元格（日历浮窗） ========== */}
+                      {/* ========== 替换成 react-day-picker 日历 ========== */}
                       <td
                         className="border border-gray-200 px-3 py-2 whitespace-nowrap relative cursor-pointer"
-                        onClick={() => {
-                          if (!docNo) return
-                          setEditingDocNo(docNo)
-                          setTempScheduleDate(assignInfo?.schedule_date ?? "")
-                        }}
                         title={assignInfo
                           ? `Last edit: ${assignInfo.editor_name} (${assignInfo.editor_role}) | ${assignInfo.edited_at}`
                           : docNo ? "Click to set schedule date" : "No bill doc_no available"}
                       >
-                        {assignInfo?.schedule_date ?? "-"}
+                        <span
+                          data-calendar-trigger
+                          onClick={() => {
+                            if (!docNo) return
+                            setEditingDocNo(docNo)
+                            setTempScheduleDate(assignInfo?.schedule_date ? new Date(assignInfo.schedule_date) : undefined)
+                          }}
+                        >
+                          {assignInfo?.schedule_date ?? "-"}
+                        </span>
                         {editingDocNo === docNo && docNo && (
                           <div style={{
                             position: "absolute",
@@ -780,23 +788,48 @@ export default function DashboardStateWrapper({
                             borderRadius: "6px",
                             boxShadow: "0 2px 10px #00000022"
                           }}>
-                            <input
-                              type="date"
-                              value={tempScheduleDate}
-                              onChange={(e) => setTempScheduleDate(e.target.value)}
-                              autoFocus
+                            <DayPicker
+                              mode="single"
+                              selected={tempScheduleDate}
+                              onSelect={setTempScheduleDate}
+                              showOutsideDays={false}
+                              captionLayout="dropdown"
+                              startMonth={new Date(2020, 0)}
+                              endMonth={new Date(2030, 11)}
+                              styles={{
+                                root: { fontSize: 'clamp(14px, 1.5vw, 16px)' },
+                                day: { height: 'clamp(32px, 4vw, 40px)', width: 'clamp(32px, 4vw, 40px)' }
+                              }}
+                              footer={
+                                <div className="flex justify-between mt-3">
+                                  <button
+                                    onClick={() => setTempScheduleDate(undefined)}
+                                    className="text-blue-500 hover:underline text-sm"
+                                  >
+                                    Clear
+                                  </button>
+                                  <button
+                                    onClick={() => setTempScheduleDate(new Date())}
+                                    className="text-blue-500 hover:underline text-sm"
+                                  >
+                                    Today
+                                  </button>
+                                </div>
+                              }
                             />
-                            <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                            <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
                               <button
                                 onClick={() => handleSaveScheduleDate(docNo, tempScheduleDate)}
                                 disabled={savingDocNo === docNo}
                                 style={{ fontSize: 12 }}
+                                className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
                               >
                                 {savingDocNo === docNo ? "Saving..." : "Save"}
                               </button>
                               <button
                                 onClick={() => setEditingDocNo(null)}
                                 style={{ fontSize: 12 }}
+                                className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
                               >
                                 Cancel
                               </button>
