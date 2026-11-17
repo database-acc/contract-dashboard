@@ -701,10 +701,10 @@ export default function DashboardStateWrapper({
         <div className="overflow-x-auto">
           <table className="w-auto min-w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-700 text-white">
+              <tr className="bg-slate-100 text-black">
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-14">No.</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[220px]">Branch Name</th>
-                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Plan (Schedule)</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[160px] whitespace-nowrap">Plan (Schedule)</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Schedule Date</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Done / Status</th>
               </tr>
