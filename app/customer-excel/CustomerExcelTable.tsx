@@ -103,6 +103,13 @@ export default function CustomerExcelTable({ rawData }: Props) {
         border: borderAll,
         alignment: { vertical: 'middle' as const }
       }
+      // OUTSTATION 分隔行浅黄色样式
+      const styleDividerRow = {
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF3C6' } } as const,
+        font: { bold: true },
+        border: borderAll,
+        alignment: { vertical: 'middle' as const }
+      }
       const styleSubTotal = {
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E0F2FE' } } as const,
         font: { bold: true },
@@ -146,6 +153,16 @@ export default function CustomerExcelTable({ rawData }: Props) {
         let currentGroup = ''
         let no = 1
         for (const r of groupedRows) {
+          // OUTSTATION 分隔行
+          if (r.isDivider) {
+            const divData: (string | number)[] = ['OUTSTATION', '']
+            divData.push(...Array(colCount - 2).fill(''))
+            const divRow = sheet.addRow(divData)
+            sheet.getRow(divRow.number).eachCell(c => c.style = styleDividerRow)
+            sheet.mergeCells(divRow.number, 3, divRow.number, colCount)
+            continue
+          }
+
           if (r.group !== currentGroup) {
             currentGroup = r.group
             const groupRowData: (string | number)[] = [currentGroup, '']
@@ -162,10 +179,10 @@ export default function CustomerExcelTable({ rawData }: Props) {
             const kpm = md?.kpm ?? 0
             const gwm = md?.gwm ?? 0
             const gtc = md?.gtc ?? 0
-            const mid = md?.midnight ?? 0
-            const out = md?.outstation ?? 0
+            const midnight = md?.midnight ?? 0
+            const outstation = md?.outstation ?? 0
             const sub = md?.totalPrice ?? 0
-            rowData.push(kps > 0 ? kps : '', kpm > 0 ? kpm : '', gwm > 0 ? gwm : '', gtc > 0 ? gtc : '', mid > 0 ? mid : '', out > 0 ? out : '', sub > 0 ? sub : '')
+            rowData.push(kps > 0 ? kps : '', kpm > 0 ? kpm : '', gwm > 0 ? gwm : '', gtc > 0 ? gtc : '', midnight > 0 ? midnight : '', outstation > 0 ? outstation : '', sub > 0 ? sub : '')
           }
           const yearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
           rowData.push(yearTotal > 0 ? yearTotal : '')
@@ -192,6 +209,7 @@ export default function CustomerExcelTable({ rawData }: Props) {
         for (const m of monthList) {
           let sumKPS = 0, sumKPM = 0, sumGWM = 0, sumGTC = 0, sumMid = 0, sumOut = 0, sumSub = 0
           for (const r of groupedRows) {
+            if(r.isDivider) continue
             const md = r.monthData[m.key]
             sumKPS += md?.kps ?? 0
             sumKPM += md?.kpm ?? 0
@@ -214,7 +232,6 @@ export default function CustomerExcelTable({ rawData }: Props) {
         const headerRow1 = sheet.addRow(headerRow1Data)
         for (let c = 1; c <= colCount; c++) sheet.getCell(1, c).style = styleHeader
 
-        // 修改表头为 Job
         const headerRow2Data: (string | number)[] = ['', '']
         for (const m of monthList) headerRow2Data.push('Job')
         const headerRow2 = sheet.addRow(headerRow2Data)
@@ -223,6 +240,16 @@ export default function CustomerExcelTable({ rawData }: Props) {
         let currentGroup = ''
         let no = 1
         for (const r of groupedRows) {
+          // OUTSTATION 分隔行
+          if (r.isDivider) {
+            const divData: (string | number)[] = ['OUTSTATION', '']
+            divData.push(...Array(colCount - 2).fill(''))
+            const divRow = sheet.addRow(divData)
+            sheet.getRow(divRow.number).eachCell(c => c.style = styleDividerRow)
+            sheet.mergeCells(divRow.number, 3, divRow.number, colCount)
+            continue
+          }
+
           if (r.group !== currentGroup) {
             currentGroup = r.group
             const groupRowData: (string | number)[] = [currentGroup, '']
@@ -261,6 +288,16 @@ export default function CustomerExcelTable({ rawData }: Props) {
         let currentGroup = ''
         let no = 1
         for (const r of groupedRows) {
+          // OUTSTATION 分隔行
+          if (r.isDivider) {
+            const divData: (string | number)[] = ['OUTSTATION', '']
+            divData.push(...Array(colCount - 2).fill(''))
+            const divRow = sheet.addRow(divData)
+            sheet.getRow(divRow.number).eachCell(c => c.style = styleDividerRow)
+            sheet.mergeCells(divRow.number, 3, divRow.number, colCount)
+            continue
+          }
+
           if (r.group !== currentGroup) {
             currentGroup = r.group
             const groupRowData: (string | number)[] = [currentGroup, '']
@@ -289,6 +326,7 @@ export default function CustomerExcelTable({ rawData }: Props) {
         for (const m of monthList) {
           let sumSub = 0
           for (const r of groupedRows) {
+            if(r.isDivider) continue
             const md = r.monthData[m.key]
             sumSub += md?.totalPrice ?? 0
           }

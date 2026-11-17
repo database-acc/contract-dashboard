@@ -14,6 +14,25 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
     let no = 1
     let currentGroup = ''
     groupedRows.forEach((r, idx) => {
+      // ========= OUTSTATION 分隔行 =========
+      if (r.isDivider) {
+        const spanCount = mode === 'job'
+          ? 2 + monthList.length
+          : 2 + monthList.length + 1
+        rows.push(
+          <tr key={`div-${idx}`}>
+            <td
+              colSpan={spanCount}
+              className="border border-amber-300 p-2 font-bold"
+              style={{ background: '#FEF3C6' }}
+            >
+              OUTSTATION
+            </td>
+          </tr>
+        )
+        return
+      }
+
       if (r.group !== currentGroup) {
         currentGroup = r.group
         const groupCells: React.ReactNode[] = []
@@ -78,6 +97,8 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
       monthList.forEach((m) => {
         let sumSub = 0
         groupedRows.forEach(r => {
+          // 跳过分隔行
+          if(r.isDivider) return
           const md = r.monthData[m.key]
           sumSub += md?.totalPrice ?? 0
         })

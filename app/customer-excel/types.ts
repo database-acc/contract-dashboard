@@ -66,4 +66,5 @@ export type AggregatedRow = {
   group: string
   branch_name: string | null
   monthData: Record<string, OutletMonthData>
+  isDivider?: boolean   // ← 新增：OUTSTATION 分隔行标记
 }

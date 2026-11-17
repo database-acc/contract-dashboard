@@ -12,6 +12,22 @@ export default function CustomerExcelTableFull({ groupedRows }: Props) {
     let no = 1
     let currentGroup = ''
     groupedRows.forEach((r, idx) => {
+      // ========== OUTSTATION 分隔行 ==========
+      if (r.isDivider) {
+        rows.push(
+          <tr key={`div-${idx}`}>
+            <td
+              colSpan={2 + monthList.length * 7 + 1}
+              className="border border-amber-300 p-2 font-bold"
+              style={{ background: '#FEF3C6' }}
+            >
+              OUTSTATION
+            </td>
+          </tr>
+        )
+        return
+      }
+
       if (r.group !== currentGroup) {
         currentGroup = r.group
         rows.push(
@@ -62,6 +78,8 @@ export default function CustomerExcelTableFull({ groupedRows }: Props) {
     monthList.forEach((m, mi) => {
       let sumKPS = 0, sumKPM = 0, sumGWM = 0, sumGTC = 0, sumMid = 0, sumOut = 0, sumSub = 0
       groupedRows.forEach(r => {
+        // 跳过分隔行，分隔行monthData是空对象，不会参与求和
+        if (r.isDivider) return
         const md = r.monthData[monthList[mi].key]
         sumKPS += md?.kps ?? 0
         sumKPM += md?.kpm ?? 0

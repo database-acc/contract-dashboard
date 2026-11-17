@@ -79,7 +79,7 @@ export function useAggregateOutletData(filteredData: ContractBranchRow[]): Aggre
         if (serviceType === 'GWM') md.gwm += price
         if (serviceType === 'GTC') md.gtc += price
 
-        // ✅ 重点修改：只有当月金额>0，才把serviceType放进这个月jobLabels
+        // ✅ 只有当月金额>0，才把serviceType放进这个月jobLabels
         if (monthTotal > 0) {
           md.jobLabels.add(serviceType)
         }
@@ -87,9 +87,39 @@ export function useAggregateOutletData(filteredData: ContractBranchRow[]): Aggre
     }
 
     const arr = Array.from(map.values())
-    return arr.sort((a, b) => {
-      if (a.group !== b.group) return a.group.localeCompare(b.group)
+
+    // ========== 自定义地区排序规则 ==========
+    const REGION_ORDER: Record<string, number> = {
+      'KL': 1,
+      'Selangor': 2,
+      'Putrajaya': 3,
+      'Negeri Sembilan': 5,
+      'Melaka': 6,
+      'Johor': 7,
+      'Perak': 8,
+      'Penang': 9,
+    }
+    const getOrder = (g: string) => REGION_ORDER[g] ?? 99
+
+    // 先按自定义地区权重排序，同地区内部按门店名称排序
+    arr.sort((a, b) => {
+      const oA = getOrder(a.group)
+      const oB = getOrder(b.group)
+      if (oA !== oB) return oA - oB
       return (a.branch_name ?? '').localeCompare(b.branch_name ?? '')
     })
+
+    // 在 Putrajaya(3) 之后、Negeri Sembilan(5) 之前插入 OUTSTATION 分隔行
+    const insertIndex = arr.findIndex(r => getOrder(r.group) >= 5)
+    if (insertIndex !== -1) {
+      arr.splice(insertIndex, 0, {
+        group: 'OUTSTATION',
+        branch_name: null,
+        monthData: {},
+        isDivider: true,
+      })
+    }
+
+    return arr
   }, [filteredData])
 }
