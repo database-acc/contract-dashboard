@@ -68,7 +68,7 @@ function getBillJobType(descRaw: string | null, total: number | null): string | 
   return null
 }
 
-// ✅ 新增：格式化 Ref Month 01/01/2026 → Jan 2026
+// ✅ 格式化 Ref Month 01/01/2026 → Jan 2026
 function formatRefMonth(text: string | null | undefined): string {
   if (!text) return ""
   const parts = text.split("&").map(p => p.trim())
@@ -83,6 +83,12 @@ function formatRefMonth(text: string | null | undefined): string {
     return part
   })
   return formatted.join(" & ")
+}
+
+// ✅ 格式化Plan Date
+function formatPlanDate(year: number, month: number): string {
+  const monthMap = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+  return `${monthMap[month - 1]} ${year}`
 }
 
 const monthAbbrMap: Record<string, number> = {
@@ -584,8 +590,8 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-14">No.</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[220px]">Branch Name</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Plan (Schedule)</th>
-                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Done</th>
-                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Status</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Plan Date</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Done / Status</th>
               </tr>
             </thead>
             <tbody>
@@ -629,6 +635,11 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           ))}
                         </div>
                       </td>
+                      {/* Plan Date 列 */}
+                      <td className="border border-gray-200 px-3 py-2 whitespace-nowrap">
+                        {formatPlanDate(year, activeMonth)}
+                      </td>
+                      {/* 合并 Done / Status 列 */}
                       <td className="border border-gray-200 px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
                           {item.doneJobs.length === 0 ? (
@@ -640,7 +651,6 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                               const isEarly = item.earlyJobs.includes(job)
                               const isWarranty = info?.projectType === 'WARRANTY'
 
-                              // ✅ 修改：黄色实线环，和红色Late样式统一
                               const earlyRingStyle: React.CSSProperties = isEarly
                                 ? { boxShadow: '0 0 0 2px #facc15' }
                                 : {}
@@ -667,12 +677,37 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                             })
                           )}
                         </div>
-                      </td>
-                      <td className="border border-gray-200 px-3 py-2">
-                        {allDone ? (
-                          hasLate ? (
-                            <span className="relative text-orange-600 font-semibold cursor-help group">
-                              ✅ Done (Late)
+                        {/* 状态文字放在badge下方 */}
+                        <div className="mt-1.5">
+                          {allDone ? (
+                            hasLate ? (
+                              <span className="relative text-orange-600 font-semibold cursor-help group text-xs">
+                                ✅ Done (Late)
+                                <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
+                                  {item.doneJobs.map((j) => {
+                                    const info = item.billMap[j]
+                                    return (
+                                      <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
+                                    )
+                                  })}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="relative text-green-600 font-semibold cursor-help group text-xs">
+                                ✅ On Time
+                                <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
+                                  {item.doneJobs.map((j) => {
+                                    const info = item.billMap[j]
+                                    return (
+                                      <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
+                                    )
+                                  })}
+                                </span>
+                              </span>
+                            )
+                          ) : someDone ? (
+                            <span className="relative text-orange-600 font-semibold cursor-help group text-xs">
+                              ⏳ Partial Done
                               <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
                                 {item.doneJobs.map((j) => {
                                   const info = item.billMap[j]
@@ -683,33 +718,9 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                               </span>
                             </span>
                           ) : (
-                            <span className="relative text-green-600 font-semibold cursor-help group">
-                              ✅ On Time
-                              <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
-                                {item.doneJobs.map((j) => {
-                                  const info = item.billMap[j]
-                                  return (
-                                    <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
-                                  )
-                                })}
-                              </span>
-                            </span>
-                          )
-                        ) : someDone ? (
-                          <span className="relative text-orange-600 font-semibold cursor-help group">
-                            ⏳ Partial Done
-                            <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
-                              {item.doneJobs.map((j) => {
-                                const info = item.billMap[j]
-                                return (
-                                  <div key={j}>{j} | Doc:{info?.docNo ?? '-'}</div>
-                                )
-                              })}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="text-red-500 font-semibold">❌ Not Start</span>
-                        )}
+                            <span className="text-red-500 font-semibold text-xs">❌ Not Start</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
