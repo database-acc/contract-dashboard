@@ -786,7 +786,8 @@ export default function DashboardStateWrapper({
                             border: "1px solid #ccc",
                             padding: "8px",
                             borderRadius: "6px",
-                            boxShadow: "0 2px 10px #00000022"
+                            boxShadow: "0 2px 10px #00000022",
+                            width: "clamp(260px, 92vw, 330px)"
                           }}>
                             <DayPicker
                               mode="single"
@@ -797,8 +798,9 @@ export default function DashboardStateWrapper({
                               startMonth={new Date(2020, 0)}
                               endMonth={new Date(2030, 11)}
                               styles={{
-                                root: { fontSize: 'clamp(14px, 1.5vw, 16px)' },
-                                day: { height: 'clamp(32px, 4vw, 40px)', width: 'clamp(32px, 4vw, 40px)' }
+                                root: { fontSize: 'clamp(13px, 1.6vw, 15px)' },
+                                day: { height: 'clamp(30px, 4.2vw, 38px)', width: 'clamp(30px, 4.2vw, 38px)' },
+                                caption_label: { marginBottom: "6px" }
                               }}
                               footer={
                                 <div className="flex justify-between mt-3">
