@@ -39,10 +39,13 @@ type MaintenanceBillRow = {
   service_type: string | null
 }
 
-// ========== 安排表类型 ==========
+// ========== 【重构】安排表类型：不再用doc_no，改用 branch + year + month + plan ==========
 type BillScheduleAssignRow = {
   id: bigint
-  doc_no: string
+  branch_name: string
+  schedule_year: number
+  schedule_month: number
+  plan: string
   schedule_date: string | null
   editor_name: string
   editor_role: string
@@ -185,10 +188,10 @@ export default function DashboardStateWrapper({
 
   // ========== Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
-  const [editingDocNo, setEditingDocNo] = useState<string | null>(null)
+  // 编辑key：branch|plan
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   const [tempScheduleDate, setTempScheduleDate] = useState<string>("")
-  const [savingDocNo, setSavingDocNo] = useState<string | null>(null)
-  // ✅ 用 ref 标记当前正在编辑的单元格，避免竞态关闭
+  const [savingKey, setSavingKey] = useState<string | null>(null)
   const editingCellRef = useRef<HTMLTableCellElement | null>(null)
 
   const loadScheduleAssign = useCallback(async () => {
@@ -204,32 +207,43 @@ export default function DashboardStateWrapper({
     loadScheduleAssign()
   }, [loadScheduleAssign])
 
-  const getAssignInfo = (docNo: string | null) => {
-    if (!docNo) return null
-    return scheduleAssignList.find(s => s.doc_no === docNo)
+  // 查找排程：branch + year + month + plan
+  const getAssignInfo = (branchName: string, plan: string, targetYear: number, targetMonth: number) => {
+    return scheduleAssignList.find(
+      s => s.branch_name === branchName && s.schedule_year === targetYear && s.schedule_month === targetMonth && s.plan === plan
+    )
   }
 
-  // 保存安排日期（upsert，只改 bill_schedule_assign）
-  const handleSaveScheduleDate = async (docNo: string, dateVal: string) => {
-    setSavingDocNo(docNo)
+  // 保存安排日期（upsert，主键：branch_name, schedule_year, schedule_month, plan）
+  const handleSaveScheduleDate = async (branchName: string, plan: string, dateVal: string) => {
+    const saveKey = `${branchName}|${plan}`
+    setSavingKey(saveKey)
     const dbDateStr = dateVal || null
     try {
       const { error } = await supabase
         .from("bill_schedule_assign")
         .upsert({
-          doc_no: docNo,
+          branch_name: branchName,
+          schedule_year: year,
+          schedule_month: activeMonth,
+          plan: plan,
           schedule_date: dbDateStr,
           editor_name: currentEditorName,
           editor_role: currentEditorRole,
           edited_at: new Date().toISOString()
-        }, { onConflict: "doc_no" })
+        }, { onConflict: "branch_name,schedule_year,schedule_month,plan" })
 
       if (error) throw error
 
       setScheduleAssignList(prev => {
-        const existIndex = prev.findIndex(x => x.doc_no === docNo)
+        const existIndex = prev.findIndex(
+          x => x.branch_name === branchName && x.schedule_year === year && x.schedule_month === activeMonth && x.plan === plan
+        )
         const newItem: BillScheduleAssignRow = {
-          doc_no: docNo,
+          branch_name: branchName,
+          schedule_year: year,
+          schedule_month: activeMonth,
+          plan: plan,
           schedule_date: dbDateStr,
           editor_name: currentEditorName,
           editor_role: currentEditorRole,
@@ -248,18 +262,18 @@ export default function DashboardStateWrapper({
       console.error("保存安排日期失败", err)
       alert("保存失败，请重试")
     } finally {
-      setSavingDocNo(null)
-      setEditingDocNo(null)
+      setSavingKey(null)
+      setEditingKey(null)
       editingCellRef.current = null
     }
   }
 
-  // ✅ 用 mousedown 判断点击外部；点在当前编辑单元格内不关闭，避免竞态闪关
+  // ✅ 用 mousedown 判断点击外部；点在当前编辑单元格内不关闭
   useEffect(() => {
     const handleMouseDownOutside = (e: MouseEvent) => {
       if (!editingCellRef.current) return
       if (!editingCellRef.current.contains(e.target as Node)) {
-        setEditingDocNo(null)
+        setEditingKey(null)
         editingCellRef.current = null
       }
     }
@@ -712,11 +726,6 @@ export default function DashboardStateWrapper({
                     ? "absolute top-full left-1/2 -translate-x-1/2 mt-1 hidden group-hover:flex flex-col"
                     : "absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col"
 
-                  const firstBillInfo = Object.values(item.billMap)[0]
-                  const docNo = firstBillInfo?.docNo ?? null
-                  const assignInfo = getAssignInfo(docNo)
-                  const isEditing = editingDocNo === docNo && !!docNo
-
                   return (
                     <tr
                       key={item.branch_name}
@@ -725,8 +734,8 @@ export default function DashboardStateWrapper({
                       }`}
                     >
                       <td className="border border-gray-200 px-3 py-2 text-gray-500">{idx + 1}</td>
-                      {/* ✅ 修改：使用 branch-name-cell 样式，加粗放大 */}
-                      <td className="border border-gray-200 px-3 py-2 branch-name-cell">
+                      {/* ✅ Branch Name：强制黑色 + 加粗 */}
+                      <td className="border border-gray-200 px-3 py-2 font-bold text-black">
                         {item.branch_name}
                       </td>
                       <td className="border border-gray-200 px-3 py-2">
@@ -742,52 +751,62 @@ export default function DashboardStateWrapper({
                         </div>
                       </td>
 
-                      {/* ✅ Schedule Date：ref 绑定当前编辑单元格，外部 mousedown 才关闭 */}
+                      {/* ✅ Schedule Date：现在【每一个plan单独编辑】，不再依赖docNo！ */}
                       <td
-                        ref={isEditing ? editingCellRef : undefined}
+                        ref={editingCellRef}
                         className="border border-gray-200 px-3 py-2 whitespace-nowrap relative"
                       >
-                        {isEditing ? (
-                          <div
-                            className="flex gap-1 items-center"
-                            onMouseDown={(e) => e.stopPropagation()}
-                          >
-                            <input
-                              type="date"
-                              value={tempScheduleDate}
-                              onChange={(e) => setTempScheduleDate(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="border border-gray-300 rounded px-1 py-0.5 text-sm bg-white text-black"
-                            />
-                            <button
-                              onClick={() => handleSaveScheduleDate(docNo!, tempScheduleDate)}
-                              disabled={savingDocNo === docNo}
-                              className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-60"
-                            >
-                              {savingDocNo === docNo ? "Saving..." : "Save"}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingDocNo(null)
-                                editingCellRef.current = null
-                              }}
-                              className="px-2 py-0.5 bg-gray-200 rounded text-xs hover:bg-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <span
-                            onClick={() => {
-                              if (!docNo) return
-                              setEditingDocNo(docNo)
-                              setTempScheduleDate(assignInfo?.schedule_date ?? "")
-                            }}
-                            className={`${docNo ? 'cursor-pointer text-blue-700 hover:underline' : 'text-gray-400'}`}
-                          >
-                            {assignInfo?.schedule_date ?? "-"}
-                          </span>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {item.planJobs.map(job => {
+                            const editKey = `${item.branch_name}|${job}`
+                            const assignInfo = getAssignInfo(item.branch_name, job, year, activeMonth)
+                            const isEditingThis = editingKey === editKey
+                            return (
+                              <div key={job} className="flex items-center gap-1">
+                                {isEditingThis ? (
+                                  <div
+                                    className="flex gap-1 items-center"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="date"
+                                      value={tempScheduleDate}
+                                      onChange={(e) => setTempScheduleDate(e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="border border-gray-300 rounded px-1 py-0.5 text-sm bg-white text-black"
+                                    />
+                                    <button
+                                      onClick={() => handleSaveScheduleDate(item.branch_name, job, tempScheduleDate)}
+                                      disabled={savingKey === editKey}
+                                      className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                      {savingKey === editKey ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingKey(null)
+                                        editingCellRef.current = null
+                                      }}
+                                      className="px-2 py-0.5 bg-gray-200 rounded text-xs hover:bg-gray-300"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span
+                                    onClick={() => {
+                                      setEditingKey(editKey)
+                                      setTempScheduleDate(assignInfo?.schedule_date ?? "")
+                                    }}
+                                    className="cursor-pointer text-blue-700 hover:underline text-xs"
+                                  >
+                                    {job}: {assignInfo?.schedule_date ?? "-"}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       </td>
 
                       {/* Done / Status 列 */}
