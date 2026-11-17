@@ -570,6 +570,17 @@ export default function DashboardStateWrapper({
           </>
         )}
 
+        {/* ✅ 新增员工手机日历页面链接，所有人可见，不需要isBoss权限 */}
+        <a
+          href="/staff-schedule"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setSideOpen(false)}
+          className="block mt-1 bg-sky-500 text-white px-3 py-2 rounded text-sm hover:bg-sky-600 transition-colors text-center mx-4"
+        >
+          Staff Mobile Schedule
+        </a>
+
         <button
           onClick={() => setSideOpen(false)}
           className="mt-auto text-slate-500 underline text-sm px-4 py-2"
