@@ -19,9 +19,9 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
         const groupCells: React.ReactNode[] = []
         monthList.forEach((m) => {
           if(mode === 'job'){
+            // 只留 Job 一个单元格，删掉 Subtotal
             groupCells.push(
-              <td key={`g-${m.key}-job`} className="border border-slate-200 p-2 border-r-2 border-slate-400"></td>,
-              <td key={`g-${m.key}-sub`} className="border border-sky-200 p-2 bg-sky-50 font-bold border-r-2 border-slate-400"></td>
+              <td key={`g-${m.key}-job`} className="border border-slate-200 p-2"></td>
             )
           }else{
             groupCells.push(
@@ -29,7 +29,10 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
             )
           }
         })
-        groupCells.push(<td key={`g-overall`} className="border border-sky-200 p-2 bg-sky-50 font-bold"></td>)
+        // Job 模式不再需要 Overall Total 金额列
+        if(mode !== 'job'){
+          groupCells.push(<td key={`g-overall`} className="border border-sky-200 p-2 bg-sky-50 font-bold"></td>)
+        }
         rows.push(
           <tr key={`g-${idx}`} className="bg-slate-100">
             <td className="border border-slate-200 p-2 font-semibold" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#e2e8f0' }}>{currentGroup}</td>
@@ -43,10 +46,8 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
         const md = r.monthData[m.key]
         if(mode === 'job'){
           const jobText = md ? Array.from(md.jobLabels).join(' / ') : ''
-          const subTotal = md?.totalPrice ?? 0
           cells.push(
-            <td key={`${m.key}-job`} className="border border-slate-200 p-2 text-center border-r-2 border-slate-400">{jobText}</td>,
-            <td key={`${m.key}-sub`} className="border border-sky-200 p-2 text-right bg-sky-50 font-bold border-r-2 border-slate-400">{subTotal > 0 ? formatNum(subTotal) : ''}</td>
+            <td key={`${m.key}-job`} className="border border-slate-200 p-2 text-center">{jobText}</td>
           )
         }else{
           const price = md?.totalPrice ?? 0
@@ -55,12 +56,15 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
           )
         }
       })
-      const outletYearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
-      cells.push(
-        <td key={`overall-${idx}`} className="border border-sky-200 p-2 text-right bg-sky-50 font-bold">
-          {outletYearTotal > 0 ? formatNum(outletYearTotal) : ''}
-        </td>
-      )
+      // Job模式：移除 Overall Total 金额单元格
+      if(mode !== 'job'){
+        const outletYearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
+        cells.push(
+          <td key={`overall-${idx}`} className="border border-sky-200 p-2 text-right bg-sky-50 font-bold">
+            {outletYearTotal > 0 ? formatNum(outletYearTotal) : ''}
+          </td>
+        )
+      }
       rows.push(
         <tr key={`r-${idx}`} className="hover:bg-slate-50">
           <td className="border border-slate-200 p-2" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#fff' }}>{no++}</td>
@@ -71,58 +75,50 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
     })
 
     const totalCells: React.ReactNode[] = []
-    let grandTotalSum = 0
-    monthList.forEach((m) => {
-      let sumSub = 0
-      groupedRows.forEach(r => {
-        const md = r.monthData[m.key]
-        sumSub += md?.totalPrice ?? 0
-      })
-      grandTotalSum += sumSub
-      if(mode === 'job'){
-        totalCells.push(
-          <td key={`t-${m.key}-job`} className="border border-sky-200 p-2 text-center border-r-2 border-slate-400"></td>,
-          <td key={`t-${m.key}-sub`} className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold border-r-2 border-slate-400">{sumSub > 0 ? formatNum(sumSub) : ''}</td>
-        )
-      }else{
+    if(mode !== 'job'){
+      let grandTotalSum = 0
+      monthList.forEach((m) => {
+        let sumSub = 0
+        groupedRows.forEach(r => {
+          const md = r.monthData[m.key]
+          sumSub += md?.totalPrice ?? 0
+        })
+        grandTotalSum += sumSub
         totalCells.push(
           <td key={`t-${m.key}-price`} className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold border-r-2 border-slate-400">{sumSub > 0 ? formatNum(sumSub) : ''}</td>
         )
-      }
-    })
-    totalCells.push(
-      <td key="t-grand" className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold">
-        {grandTotalSum > 0 ? formatNum(grandTotalSum) : ''}
-      </td>
-    )
-    rows.push(
-      <tr key="total-row" className="bg-sky-200 font-bold">
-        <td className="border border-sky-300 border-t-2 border-b-2 p-2" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#bae6fd' }}>OVERALL TOTAL</td>
-        <td className="border border-sky-300 border-t-2 border-b-2 p-2 whitespace-nowrap" style={{ position: 'sticky', left: 54, zIndex: 12, background: '#bae6fd' }}></td>
-        {...totalCells}
-      </tr>
-    )
+      })
+      totalCells.push(
+        <td key="t-grand" className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold">
+          {grandTotalSum > 0 ? formatNum(grandTotalSum) : ''}
+        </td>
+      )
+      rows.push(
+        <tr key="total-row" className="bg-sky-200 font-bold">
+          <td className="border border-sky-300 border-t-2 border-b-2 p-2" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#bae6fd' }}>OVERALL TOTAL</td>
+          <td className="border border-sky-300 border-t-2 border-b-2 p-2 whitespace-nowrap" style={{ position: 'sticky', left: 54, zIndex: 12, background: '#bae6fd' }}></td>
+          {...totalCells}
+        </tr>
+      )
+    }
     return rows
   }
 
   if(mode === 'job'){
     return (
-      <table className="border-collapse text-sm" style={{ minWidth: '1750px', width: 'max-content' }}>
+      <table className="border-collapse text-sm" style={{ minWidth: '1200px', width: 'max-content' }}>
         <thead>
           <tr className="bg-slate-200">
             <th rowSpan={2} className="border border-slate-300 p-2" style={{ position: 'sticky', left: 0, top: 0, zIndex: 15, background: '#e2e8f0' }}>NO</th>
             <th rowSpan={2} className="border border-slate-300 p-2 whitespace-nowrap" style={{ position: 'sticky', left: 54, top: 0, zIndex: 15, background: '#e2e8f0' }}>Outlet</th>
             {monthList.map((m) => (
-              <th key={`month-${m.key}`} colSpan={2} className="border border-slate-300 p-2 border-r-2 border-slate-400" style={{ position: 'sticky', top: 0, zIndex: 11, background: '#e2e8f0' }}>{m.label}</th>
+              <th key={`month-${m.key}`} className="border border-slate-300 p-2" style={{ position: 'sticky', top: 0, zIndex: 11, background: '#e2e8f0' }}>{m.label}</th>
             ))}
-            <th rowSpan={2} className="border border-sky-300 p-2 bg-sky-50 font-bold" style={{ position: 'sticky', top: 0, zIndex: 11 }}>Overall Total</th>
+            {/* Job Summary 不再有 Overall Total */}
           </tr>
           <tr className="bg-slate-100">
             {monthList.map((m) => (
-              <React.Fragment key={`sub-${m.key}`}>
-                <th className="border border-slate-300 p-2 border-r-2 border-slate-400" style={{ position: 'sticky', top: 36, zIndex: 11, background: '#f1f5f9' }}>Job</th>
-                <th className="border border-sky-300 p-2 font-bold text-sky-900 bg-sky-50 border-r-2 border-slate-400" style={{ position: 'sticky', top: 36, zIndex: 11 }}>Subtotal</th>
-              </React.Fragment>
+              <th key={`sub-${m.key}`} className="border border-slate-300 p-2" style={{ position: 'sticky', top: 36, zIndex: 11, background: '#f1f5f9' }}>Job</th>
             ))}
           </tr>
         </thead>
