@@ -1,8 +1,6 @@
 'use client'
-import { useState, useMemo, ReactNode, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo, ReactNode, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { format } from 'date-fns'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,7 +39,7 @@ type MaintenanceBillRow = {
   service_type: string | null
 }
 
-// ========== 新增：安排表类型 ==========
+// ========== 安排表类型 ==========
 type BillScheduleAssignRow = {
   id: bigint
   doc_no: string
@@ -98,16 +96,9 @@ function formatRefMonth(text: string | null | undefined): string {
       const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
       return date.toLocaleDateString("en-GB", { month: "short", year: "numeric" })
     }
-    // 兼容已经是 Jan-26 格式的兜底
     return part
   })
   return formatted.join(" & ")
-}
-
-// ✅ 格式化Schedule Date
-function formatScheduleDate(year: number, month: number): string {
-  const monthMap = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-  return `${monthMap[month - 1]} ${year}`
 }
 
 const monthAbbrMap: Record<string, number> = {
@@ -131,7 +122,6 @@ function parseBillMonth(monthStr: string | null): ParseResult {
   const parts = monthStr.split('&').map(s => s.trim()).filter(Boolean)
   const isMultiMonth = parts.length > 1
   for (const s of parts) {
-    // dd/mm/yyyy
     const dateSlashMatch = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (dateSlashMatch) {
       const m = parseInt(dateSlashMatch[2], 10)
@@ -141,7 +131,6 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       }
       continue
     }
-    // 2026-01
     const isoMatch = s.match(/^(\d{4})-(\d{1,2})$/)
     if (isoMatch) {
       const y = parseInt(isoMatch[1], 10)
@@ -151,7 +140,6 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       }
       continue
     }
-    // Jan-26
     const abbrMatch = s.match(/^([A-Za-z]{3})-(\d{2})$/)
     if (abbrMatch) {
       const abbr = abbrMatch[1]
@@ -175,7 +163,7 @@ type BillInfo = {
   isMultiMonth: boolean
   refRawText: string
   serviceTypes: string[]
-  projectType: string // CONTRACT / WARRANTY
+  projectType: string
 }
 
 export default function DashboardStateWrapper({
@@ -187,7 +175,6 @@ export default function DashboardStateWrapper({
   currentEditorRole,
   children
 }: Props) {
-  const router = useRouter()
   const [year, setYear] = useState(2026)
   const [activeMonth, setActiveMonth] = useState(1)
   const [searchText, setSearchText] = useState('')
@@ -196,11 +183,13 @@ export default function DashboardStateWrapper({
 
   const [sideOpen, setSideOpen] = useState(false)
 
-  // ========== 新增：Schedule Assign 状态 ==========
+  // ========== Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
   const [editingDocNo, setEditingDocNo] = useState<string | null>(null)
   const [tempScheduleDate, setTempScheduleDate] = useState<string>("")
   const [savingDocNo, setSavingDocNo] = useState<string | null>(null)
+  // ✅ 用 ref 标记当前正在编辑的单元格，避免竞态关闭
+  const editingCellRef = useRef<HTMLTableCellElement | null>(null)
 
   const loadScheduleAssign = useCallback(async () => {
     const { data, error } = await supabase
@@ -215,13 +204,12 @@ export default function DashboardStateWrapper({
     loadScheduleAssign()
   }, [loadScheduleAssign])
 
-  // 根据 doc_no 获取安排记录
   const getAssignInfo = (docNo: string | null) => {
     if (!docNo) return null
     return scheduleAssignList.find(s => s.doc_no === docNo)
   }
 
-  // 保存安排日期（upsert，只改 bill_schedule_assign，不动 bills）
+  // 保存安排日期（upsert，只改 bill_schedule_assign）
   const handleSaveScheduleDate = async (docNo: string, dateVal: string) => {
     setSavingDocNo(docNo)
     const dbDateStr = dateVal || null
@@ -262,19 +250,21 @@ export default function DashboardStateWrapper({
     } finally {
       setSavingDocNo(null)
       setEditingDocNo(null)
+      editingCellRef.current = null
     }
   }
 
-  // 点击空白关闭输入框
+  // ✅ 用 mousedown 判断点击外部；点在当前编辑单元格内不关闭，避免竞态闪关
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest(".schedule-input-wrap")) {
+    const handleMouseDownOutside = (e: MouseEvent) => {
+      if (!editingCellRef.current) return
+      if (!editingCellRef.current.contains(e.target as Node)) {
         setEditingDocNo(null)
+        editingCellRef.current = null
       }
     }
-    window.addEventListener("click", handleClickOutside)
-    return () => window.removeEventListener("click", handleClickOutside)
+    document.addEventListener("mousedown", handleMouseDownOutside)
+    return () => document.removeEventListener("mousedown", handleMouseDownOutside)
   }, [])
 
   const handleRefresh = () => {
@@ -352,7 +342,6 @@ export default function DashboardStateWrapper({
 
       if (!isContract && !isWarranty) return
 
-      // WARRANTY 硬性校验：schedule_month_ref 与 service_type 都不能为空
       if (isWarranty) {
         if (!bill.schedule_month_ref || !bill.service_type) {
           return
@@ -421,7 +410,6 @@ export default function DashboardStateWrapper({
       )
       if (!ok || !row.description) return
 
-      // ✅ 重点改动：从 description 识别 job type，不再读 contract_no
       const desc = row.description.trim().toUpperCase()
       let type: string | null = null
       if (desc.includes('GREASE WASTE MANAGEMENT')) type = 'GWM'
@@ -551,7 +539,6 @@ export default function DashboardStateWrapper({
             >
               Data Validation Checker
             </a>
-            {/* Boss-only：Bill‑Contract Mismatch Check */}
             <a
               href="/bill-contract-mismatch"
               onClick={() => setSideOpen(false)}
@@ -559,7 +546,6 @@ export default function DashboardStateWrapper({
             >
               Bill‑Contract Mismatch Check
             </a>
-            {/* ✅ 新增 Bill Diff Checker，只有Boss可见 */}
             <a
               href="/bill-diff"
               onClick={() => setSideOpen(false)}
@@ -577,7 +563,6 @@ export default function DashboardStateWrapper({
           Close
         </button>
       </div>
-      {/* Overlay */}
       {sideOpen && (
         <div
           onClick={() => setSideOpen(false)}
@@ -722,17 +707,15 @@ export default function DashboardStateWrapper({
                   const allDone = item.planJobs.every(j => item.doneJobs.includes(j))
                   const someDone = item.planJobs.some(j => item.doneJobs.includes(j))
                   const hasLate = item.lateJobs.length > 0
-                  const hasEarly = item.earlyJobs.length > 0
-                  // 第一行浮窗向下弹出，其他向上
                   const isFirstRow = idx === 0
                   const tooltipClass = isFirstRow
                     ? "absolute top-full left-1/2 -translate-x-1/2 mt-1 hidden group-hover:flex flex-col"
                     : "absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col"
 
-                  // 取这条branch下任意一个bill的docNo（用来绑定schedule assign）
                   const firstBillInfo = Object.values(item.billMap)[0]
                   const docNo = firstBillInfo?.docNo ?? null
                   const assignInfo = getAssignInfo(docNo)
+                  const isEditing = editingDocNo === docNo && !!docNo
 
                   return (
                     <tr
@@ -742,7 +725,8 @@ export default function DashboardStateWrapper({
                       }`}
                     >
                       <td className="border border-gray-200 px-3 py-2 text-gray-500">{idx + 1}</td>
-                      <td className="border border-gray-200 px-3 py-2 font-medium text-gray-800">
+                      {/* ✅ Branch Name 强制纯黑色，不再被链接样式染蓝 */}
+                      <td className="border border-gray-200 px-3 py-2 font-medium text-black">
                         {item.branch_name}
                       </td>
                       <td className="border border-gray-200 px-3 py-2">
@@ -757,25 +741,36 @@ export default function DashboardStateWrapper({
                           ))}
                         </div>
                       </td>
-                      {/* ========== 换回原生 date input（第一版简洁样式） ========== */}
-                      <td className="border border-gray-200 px-3 py-2 whitespace-nowrap relative schedule-input-wrap">
-                        {editingDocNo === docNo && docNo ? (
-                          <div className="flex gap-1 items-center">
+
+                      {/* ✅ Schedule Date：ref 绑定当前编辑单元格，外部 mousedown 才关闭 */}
+                      <td
+                        ref={isEditing ? editingCellRef : undefined}
+                        className="border border-gray-200 px-3 py-2 whitespace-nowrap relative"
+                      >
+                        {isEditing ? (
+                          <div
+                            className="flex gap-1 items-center"
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
                             <input
                               type="date"
                               value={tempScheduleDate}
                               onChange={(e) => setTempScheduleDate(e.target.value)}
-                              className="border border-gray-300 rounded px-1 py-0.5 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              className="border border-gray-300 rounded px-1 py-0.5 text-sm bg-white text-black"
                             />
                             <button
-                              onClick={() => handleSaveScheduleDate(docNo, tempScheduleDate)}
+                              onClick={() => handleSaveScheduleDate(docNo!, tempScheduleDate)}
                               disabled={savingDocNo === docNo}
                               className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-60"
                             >
-                              Save
+                              {savingDocNo === docNo ? "Saving..." : "Save"}
                             </button>
                             <button
-                              onClick={() => setEditingDocNo(null)}
+                              onClick={() => {
+                                setEditingDocNo(null)
+                                editingCellRef.current = null
+                              }}
                               className="px-2 py-0.5 bg-gray-200 rounded text-xs hover:bg-gray-300"
                             >
                               Cancel
@@ -788,13 +783,14 @@ export default function DashboardStateWrapper({
                               setEditingDocNo(docNo)
                               setTempScheduleDate(assignInfo?.schedule_date ?? "")
                             }}
-                            className="cursor-pointer text-blue-700 hover:underline"
+                            className={`${docNo ? 'cursor-pointer text-blue-700 hover:underline' : 'text-gray-400'}`}
                           >
                             {assignInfo?.schedule_date ?? "-"}
                           </span>
                         )}
                       </td>
-                      {/* 合并 Done / Status 列 */}
+
+                      {/* Done / Status 列 */}
                       <td className="border border-gray-200 px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
                           {item.doneJobs.length === 0 ? (
@@ -832,7 +828,6 @@ export default function DashboardStateWrapper({
                             })
                           )}
                         </div>
-                        {/* 状态文字放在badge下方 */}
                         <div className="mt-1.5">
                           {allDone ? (
                             hasLate ? (
@@ -884,7 +879,7 @@ export default function DashboardStateWrapper({
             </tbody>
           </table>
         </div>
-        {/* 图例 ✅ 更新成黄色实线环 */}
+        {/* 图例 */}
         <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
           <div className="font-semibold mb-2">Legend Notes:</div>
           <div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
