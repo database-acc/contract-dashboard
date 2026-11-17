@@ -19,7 +19,6 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
         const groupCells: React.ReactNode[] = []
         monthList.forEach((m) => {
           if(mode === 'job'){
-            // 只留 Job 一个单元格，删掉 Subtotal
             groupCells.push(
               <td key={`g-${m.key}-job`} className="border border-slate-200 p-2"></td>
             )
@@ -29,7 +28,6 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
             )
           }
         })
-        // Job 模式不再需要 Overall Total 金额列
         if(mode !== 'job'){
           groupCells.push(<td key={`g-overall`} className="border border-sky-200 p-2 bg-sky-50 font-bold"></td>)
         }
@@ -45,7 +43,8 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
       monthList.forEach((m) => {
         const md = r.monthData[m.key]
         if(mode === 'job'){
-          const jobText = md ? Array.from(md.jobLabels).join(' / ') : ''
+          // ✅ 重点：取【当月】的job，不是全部job
+          const jobText = md?.jobLabels?.size ? Array.from(md.jobLabels).join(' / ') : ''
           cells.push(
             <td key={`${m.key}-job`} className="border border-slate-200 p-2 text-center">{jobText}</td>
           )
@@ -56,7 +55,6 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
           )
         }
       })
-      // Job模式：移除 Overall Total 金额单元格
       if(mode !== 'job'){
         const outletYearTotal = monthList.reduce((sum, m) => sum + (r.monthData[m.key]?.totalPrice ?? 0), 0)
         cells.push(
@@ -114,7 +112,6 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
             {monthList.map((m) => (
               <th key={`month-${m.key}`} className="border border-slate-300 p-2" style={{ position: 'sticky', top: 0, zIndex: 11, background: '#e2e8f0' }}>{m.label}</th>
             ))}
-            {/* Job Summary 不再有 Overall Total */}
           </tr>
           <tr className="bg-slate-100">
             {monthList.map((m) => (
