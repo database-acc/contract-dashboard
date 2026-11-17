@@ -809,9 +809,9 @@ export default function DashboardStateWrapper({
                         </div>
                       </td>
 
-                      {/* Done / Status 列 */}
+                      {/* Done / Status 列 ———— 修改后：badge与状态同一行 */}
                       <td className="border border-gray-200 px-3 py-2">
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {item.doneJobs.length === 0 ? (
                             <span className="text-gray-400">-</span>
                           ) : (
@@ -846,8 +846,7 @@ export default function DashboardStateWrapper({
                               )
                             })
                           )}
-                        </div>
-                        <div className="mt-1.5">
+
                           {allDone ? (
                             hasLate ? (
                               <span className="relative text-orange-600 font-semibold cursor-help group text-xs">
