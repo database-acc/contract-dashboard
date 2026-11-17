@@ -214,8 +214,9 @@ export default function CustomerExcelTable({ rawData }: Props) {
         const headerRow1 = sheet.addRow(headerRow1Data)
         for (let c = 1; c <= colCount; c++) sheet.getCell(1, c).style = styleHeader
 
+        // 修改表头为 Job
         const headerRow2Data: (string | number)[] = ['', '']
-        for (const m of monthList) headerRow2Data.push('Service Type')
+        for (const m of monthList) headerRow2Data.push('Job')
         const headerRow2 = sheet.addRow(headerRow2Data)
         for (let c = 1; c <= colCount; c++) sheet.getCell(2, c).style = styleSubHeader
 
@@ -232,16 +233,11 @@ export default function CustomerExcelTable({ rawData }: Props) {
             sheet.mergeCells(sheet.lastRow!.number, 3, sheet.lastRow!.number, colCount)
           }
           const rowData: (string | number)[] = [no++, r.branch_name ?? '-']
-          // 临时方案：从该Outlet所有合同提取唯一service type，避开serviceLabels不存在
-          const outletContracts = filteredData.filter(d => d.branch_name === r.branch_name)
-          const serviceSet = new Set<string>()
-          outletContracts.forEach(c => {
-            const st = getServiceType(c.contract_no)
-            if(st) serviceSet.add(st)
-          })
-          const serviceText = Array.from(serviceSet).join(' / ')
+          // 按月读取 jobLabels，与网页逻辑保持一致
           for (const m of monthList) {
-            rowData.push(serviceText)
+            const md = r.monthData[m.key]
+            const jobText = md?.jobLabels?.size ? Array.from(md.jobLabels).join(' / ') : ''
+            rowData.push(jobText)
           }
           const dataRow = sheet.addRow(rowData)
           sheet.getCell(dataRow.number, 1).style = styleCellLeft
