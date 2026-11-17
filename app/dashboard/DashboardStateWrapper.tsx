@@ -1,6 +1,12 @@
 'use client'
-import { useState, useMemo, ReactNode } from 'react'
+import { useState, useMemo, ReactNode, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type ContractBranchRow = {
   id: bigint
@@ -34,11 +40,23 @@ type MaintenanceBillRow = {
   service_type: string | null
 }
 
+// ========== 新增：安排表类型 ==========
+type BillScheduleAssignRow = {
+  id: bigint
+  doc_no: string
+  schedule_date: string | null
+  editor_name: string
+  editor_role: string
+  edited_at: string
+}
+
 type Props = {
   rawBranchData: ContractBranchRow[]
   rawBillsData: MaintenanceBillRow[]
   isBoss: boolean
   updateBillServiceType: (billId: bigint, serviceType: string | null) => Promise<void>
+  currentEditorName: string
+  currentEditorRole: 'boss' | 'staff'
   children?: ReactNode
 }
 
@@ -159,7 +177,15 @@ type BillInfo = {
   projectType: string // CONTRACT / WARRANTY
 }
 
-export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isBoss, updateBillServiceType, children }: Props) {
+export default function DashboardStateWrapper({
+  rawBranchData,
+  rawBillsData,
+  isBoss,
+  updateBillServiceType,
+  currentEditorName,
+  currentEditorRole,
+  children
+}: Props) {
   const router = useRouter()
   const [year, setYear] = useState(2026)
   const [activeMonth, setActiveMonth] = useState(1)
@@ -168,6 +194,86 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
   const [serviceFilter, setServiceFilter] = useState<'all' | 'GWM' | 'KPM' | 'KPS' | 'GTC'>('all')
 
   const [sideOpen, setSideOpen] = useState(false)
+
+  // ========== 新增：Schedule Assign 状态 ==========
+  const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
+  const [editingDocNo, setEditingDocNo] = useState<string | null>(null)
+  const [tempScheduleDate, setTempScheduleDate] = useState<string>("")
+  const [savingDocNo, setSavingDocNo] = useState<string | null>(null)
+
+  const loadScheduleAssign = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("bill_schedule_assign")
+      .select("*")
+    if (!error && data) {
+      setScheduleAssignList(data as BillScheduleAssignRow[])
+    }
+  }, [])
+
+  useEffect(() => {
+    loadScheduleAssign()
+  }, [loadScheduleAssign])
+
+  // 根据 doc_no 获取安排记录
+  const getAssignInfo = (docNo: string | null) => {
+    if (!docNo) return null
+    return scheduleAssignList.find(s => s.doc_no === docNo)
+  }
+
+  // 保存安排日期（upsert，只改 bill_schedule_assign，不动 bills）
+  const handleSaveScheduleDate = async (docNo: string, newDate: string) => {
+    setSavingDocNo(docNo)
+    try {
+      const { error } = await supabase
+        .from("bill_schedule_assign")
+        .upsert({
+          doc_no: docNo,
+          schedule_date: newDate || null,
+          editor_name: currentEditorName,
+          editor_role: currentEditorRole,
+          edited_at: new Date().toISOString()
+        }, { onConflict: "doc_no" })
+
+      if (error) throw error
+
+      setScheduleAssignList(prev => {
+        const existIndex = prev.findIndex(x => x.doc_no === docNo)
+        const newItem: BillScheduleAssignRow = {
+          doc_no: docNo,
+          schedule_date: newDate || null,
+          editor_name: currentEditorName,
+          editor_role: currentEditorRole,
+          edited_at: new Date().toISOString(),
+          id: existIndex >= 0 ? prev[existIndex].id : 0n
+        }
+        if (existIndex >= 0) {
+          const arr = [...prev]
+          arr[existIndex] = newItem
+          return arr
+        } else {
+          return [...prev, newItem]
+        }
+      })
+    } catch (err) {
+      console.error("保存安排日期失败", err)
+      alert("保存失败，请重试")
+    } finally {
+      setSavingDocNo(null)
+      setEditingDocNo(null)
+    }
+  }
+
+  // 点击空白关闭日历浮窗
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest("td") && !target.closest("input[type='date']")) {
+        setEditingDocNo(null)
+      }
+    }
+    window.addEventListener("click", handleClickOutside)
+    return () => window.removeEventListener("click", handleClickOutside)
+  }, [])
 
   const handleRefresh = () => {
     window.location.reload()
@@ -293,6 +399,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
     const scheduleMap = new Map<string, {
       branch_name: string
       company_name: string
+      description: string | null
       planJobs: Array<{ job: string; planYMKey: string; planYM: number }>
     }>()
     const currentPlanYMKey = `${year}-${String(activeMonth).padStart(2, '0')}`
@@ -310,15 +417,22 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
         row.status,
         row.month_of_year
       )
-      if (!ok || !row.contract_no) return
-      const parts = row.contract_no.split('-')
-      const type = parts.length > 1 ? parts[1].trim() : ''
-      if (!['GWM', 'KPS', 'KPM', 'GTC'].includes(type)) return
+      if (!ok || !row.description) return
+
+      // ✅ 重点改动：从 description 识别 job type，不再读 contract_no
+      const desc = row.description.trim().toUpperCase()
+      let type: string | null = null
+      if (desc.includes('GREASE WASTE MANAGEMENT')) type = 'GWM'
+      else if (desc.includes('KITCHEN PIPELINE MANAGEMENT')) type = 'KPM'
+      else if (desc.includes('KITCHEN PIPELINE SERVICE')) type = 'KPS'
+      else if (desc.includes('GREASE TRAP CLEARANCE')) type = 'GTC'
+      if (!type) return
 
       if (!scheduleMap.has(bName)) {
         scheduleMap.set(bName, {
           branch_name: bName,
           company_name: row.company_name ?? '',
+          description: row.description,
           planJobs: []
         })
       }
@@ -612,6 +726,12 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                   const tooltipClass = isFirstRow
                     ? "absolute top-full left-1/2 -translate-x-1/2 mt-1 hidden group-hover:flex flex-col"
                     : "absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:flex flex-col"
+
+                  // 取这条branch下任意一个bill的docNo（用来绑定schedule assign）
+                  const firstBillInfo = Object.values(item.billMap)[0]
+                  const docNo = firstBillInfo?.docNo ?? null
+                  const assignInfo = getAssignInfo(docNo)
+
                   return (
                     <tr
                       key={item.branch_name}
@@ -635,9 +755,54 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           ))}
                         </div>
                       </td>
-                      {/* Schedule Date 列 */}
-                      <td className="border border-gray-200 px-3 py-2 whitespace-nowrap">
-                        {formatScheduleDate(year, activeMonth)}
+                      {/* ========== 修改后的 Schedule Date 单元格（日历浮窗） ========== */}
+                      <td
+                        className="border border-gray-200 px-3 py-2 whitespace-nowrap relative cursor-pointer"
+                        onClick={() => {
+                          if (!docNo) return
+                          setEditingDocNo(docNo)
+                          setTempScheduleDate(assignInfo?.schedule_date ?? "")
+                        }}
+                        title={assignInfo
+                          ? `Last edit: ${assignInfo.editor_name} (${assignInfo.editor_role}) | ${assignInfo.edited_at}`
+                          : docNo ? "Click to set schedule date" : "No bill doc_no available"}
+                      >
+                        {assignInfo?.schedule_date ?? "-"}
+                        {editingDocNo === docNo && docNo && (
+                          <div style={{
+                            position: "absolute",
+                            zIndex: 999,
+                            top: "100%",
+                            left: 0,
+                            background: "#fff",
+                            border: "1px solid #ccc",
+                            padding: "8px",
+                            borderRadius: "6px",
+                            boxShadow: "0 2px 10px #00000022"
+                          }}>
+                            <input
+                              type="date"
+                              value={tempScheduleDate}
+                              onChange={(e) => setTempScheduleDate(e.target.value)}
+                              autoFocus
+                            />
+                            <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                              <button
+                                onClick={() => handleSaveScheduleDate(docNo, tempScheduleDate)}
+                                disabled={savingDocNo === docNo}
+                                style={{ fontSize: 12 }}
+                              >
+                                {savingDocNo === docNo ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                onClick={() => setEditingDocNo(null)}
+                                style={{ fontSize: 12 }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </td>
                       {/* 合并 Done / Status 列 */}
                       <td className="border border-gray-200 px-3 py-2">

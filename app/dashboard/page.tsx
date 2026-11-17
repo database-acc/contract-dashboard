@@ -107,6 +107,9 @@ async function DashboardContent() {
   if (!user) {
     redirect('/login')
   }
+  // ✅ 这里拿到 userName
+  const userName = user.user_metadata?.name ?? user.email ?? 'Unknown User'
+
   const { data: profile, error: profileErr } = await supabase
     .from('profiles')
     .select('role')
@@ -173,6 +176,8 @@ async function DashboardContent() {
         rawBillsData={billsList}
         isBoss={isBoss}
         updateBillServiceType={updateBillServiceType}
+        currentEditorName={userName}
+        currentEditorRole={isBoss ? "boss" : "staff"}
       >
         <form action={signOut}>
           <button
