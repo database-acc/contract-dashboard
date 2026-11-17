@@ -51,6 +51,7 @@ export function useAggregateOutletData(filteredData: ContractBranchRow[]): Aggre
       }
       const item = map.get(key)!
 
+      // 遍历12个月，计算金额
       for (const m of monthList) {
         const price = (r[`${m.key}_price` as keyof ContractBranchRow] as number | null) ?? 0
         const midnight = (r[`${m.key}_midnight` as keyof ContractBranchRow] as number | null) ?? 0
@@ -70,7 +71,6 @@ export function useAggregateOutletData(filteredData: ContractBranchRow[]): Aggre
           }
         }
         const md = item.monthData[m.key]
-        md.jobLabels.add(serviceType)
         md.totalPrice += monthTotal
         md.midnight += midnight
         md.outstation += outstation
@@ -78,6 +78,11 @@ export function useAggregateOutletData(filteredData: ContractBranchRow[]): Aggre
         if (serviceType === 'KPM') md.kpm += price
         if (serviceType === 'GWM') md.gwm += price
         if (serviceType === 'GTC') md.gtc += price
+
+        // ✅ 重点修改：只有当月金额>0，才把serviceType放进这个月jobLabels
+        if (monthTotal > 0) {
+          md.jobLabels.add(serviceType)
+        }
       }
     }
 
