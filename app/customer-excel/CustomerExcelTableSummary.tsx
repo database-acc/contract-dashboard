@@ -62,10 +62,10 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
       monthList.forEach((m) => {
         const md = r.monthData[m.key]
         if(mode === 'job'){
-          // ✅ 重点：取【当月】的job，不是全部job
+          // ✅ 取【当月】的job，不是全部job
           const jobText = md?.jobLabels?.size ? Array.from(md.jobLabels).join(' / ') : ''
           cells.push(
-            <td key={`${m.key}-job`} className="border border-slate-200 p-2 text-center">{jobText}</td>
+            <td key={`${m.key}-job`} className="border border-slate-200 p-2 text-center w-[92px]">{jobText}</td>
           )
         }else{
           const price = md?.totalPrice ?? 0
@@ -97,7 +97,6 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
       monthList.forEach((m) => {
         let sumSub = 0
         groupedRows.forEach(r => {
-          // 跳过分隔行
           if(r.isDivider) return
           const md = r.monthData[m.key]
           sumSub += md?.totalPrice ?? 0
@@ -125,18 +124,19 @@ export default function CustomerExcelTableSummary({ groupedRows, mode }: Props) 
 
   if(mode === 'job'){
     return (
-      <table className="border-collapse text-sm" style={{ minWidth: '1200px', width: 'max-content' }}>
+      // ✅ table-fixed：强制按表头固定列宽，月份列不再被内容撑开
+      <table className="border-collapse text-sm table-fixed" style={{ minWidth: '1200px' }}>
         <thead>
           <tr className="bg-slate-200">
-            <th rowSpan={2} className="border border-slate-300 p-2" style={{ position: 'sticky', left: 0, top: 0, zIndex: 15, background: '#e2e8f0' }}>NO</th>
-            <th rowSpan={2} className="border border-slate-300 p-2 whitespace-nowrap" style={{ position: 'sticky', left: 54, top: 0, zIndex: 15, background: '#e2e8f0' }}>Outlet</th>
+            <th rowSpan={2} className="border border-slate-300 p-2 w-[54px]" style={{ position: 'sticky', left: 0, top: 0, zIndex: 15, background: '#e2e8f0' }}>NO</th>
+            <th rowSpan={2} className="border border-slate-300 p-2 whitespace-nowrap w-[260px]" style={{ position: 'sticky', left: 54, top: 0, zIndex: 15, background: '#e2e8f0' }}>Outlet</th>
             {monthList.map((m) => (
-              <th key={`month-${m.key}`} className="border border-slate-300 p-2" style={{ position: 'sticky', top: 0, zIndex: 11, background: '#e2e8f0' }}>{m.label}</th>
+              <th key={`month-${m.key}`} className="border border-slate-300 p-2 w-[92px]" style={{ position: 'sticky', top: 0, zIndex: 11, background: '#e2e8f0' }}>{m.label}</th>
             ))}
           </tr>
           <tr className="bg-slate-100">
             {monthList.map((m) => (
-              <th key={`sub-${m.key}`} className="border border-slate-300 p-2" style={{ position: 'sticky', top: 36, zIndex: 11, background: '#f1f5f9' }}>Job</th>
+              <th key={`sub-${m.key}`} className="border border-slate-300 p-2 w-[92px]" style={{ position: 'sticky', top: 36, zIndex: 11, background: '#f1f5f9' }}>Job</th>
             ))}
           </tr>
         </thead>
