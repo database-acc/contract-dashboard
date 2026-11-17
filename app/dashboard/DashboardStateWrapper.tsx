@@ -85,8 +85,8 @@ function formatRefMonth(text: string | null | undefined): string {
   return formatted.join(" & ")
 }
 
-// ✅ 格式化Plan Date
-function formatPlanDate(year: number, month: number): string {
+// ✅ 格式化Schedule Date
+function formatScheduleDate(year: number, month: number): string {
   const monthMap = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
   return `${monthMap[month - 1]} ${year}`
 }
@@ -590,7 +590,7 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-14">No.</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[220px]">Branch Name</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Plan (Schedule)</th>
-                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Plan Date</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Schedule Date</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Done / Status</th>
               </tr>
             </thead>
@@ -635,9 +635,9 @@ export default function DashboardStateWrapper({ rawBranchData, rawBillsData, isB
                           ))}
                         </div>
                       </td>
-                      {/* Plan Date 列 */}
+                      {/* Schedule Date 列 */}
                       <td className="border border-gray-200 px-3 py-2 whitespace-nowrap">
-                        {formatPlanDate(year, activeMonth)}
+                        {formatScheduleDate(year, activeMonth)}
                       </td>
                       {/* 合并 Done / Status 列 */}
                       <td className="border border-gray-200 px-3 py-2">
