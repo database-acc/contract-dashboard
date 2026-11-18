@@ -13,7 +13,7 @@ type BillScheduleAssignRow = {
   schedule_year: number
   schedule_month: number
   plan: string
-  schedule_date: string | null // YYYY-MM-DD
+  schedule_date: string | null // YYYY‑MM‑DD
   editor_name: string
   editor_role: string
   edited_at: string
@@ -47,7 +47,7 @@ export default function StaffSchedulePage() {
     fetchAssign()
   }, [])
 
-  // 将数据按日期分组 key=YYYY-MM-DD
+  // 将数据按日期分组 key=YYYY‑MM‑DD
   const dayMap = useMemo(() => {
     const map = new Map<string, DayItem>()
     assignList.forEach((row) => {
@@ -145,23 +145,23 @@ export default function StaffSchedulePage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
+    <div className="min‑h‑screen bg‑gray‑50 p‑3 max‑w‑2xl mx‑auto">
+      <h1 className="text‑xl font‑bold text‑center mb‑4">Staff Work Schedule</h1>
 
       {/* 月份头部导航 */}
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={goPrev} className="px-3 py-1 bg-gray-200 rounded text-sm">◀ Prev</button>
-        <div className="font-semibold">{monthNames[currentMonth]} {currentYear}</div>
-        <button onClick={goNext} className="px-3 py-1 bg-gray-200 rounded text-sm">Next ▶</button>
+      <div className="flex items‑center justify‑between mb‑3">
+        <button onClick={goPrev} className="px‑3 py‑1 bg‑gray‑200 rounded text‑sm">◀ Prev</button>
+        <div className="font‑semibold">{monthNames[currentMonth]} {currentYear}</div>
+        <button onClick={goNext} className="px‑3 py‑1 bg‑gray‑200 rounded text‑sm">Next ▶</button>
       </div>
 
       {/* 星期表头 */}
-      <div className="grid grid-cols-7 gap-1 mb-2 text-xs text-center font-medium text-gray-500">
+      <div className="grid grid‑cols‑7 gap‑2 mb‑2 text‑xs text‑center font‑medium text‑gray‑500">
         <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
       </div>
 
-      {/* 日历格子 */}
-      <div className="grid grid-cols-7 gap-1">
+      {/* 日历格子：手机放大尺寸 md以上电脑自动变大；gap‑2增加格子间隙 */}
+      <div className="grid grid‑cols‑7 gap‑2">
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
           return (
@@ -173,14 +173,16 @@ export default function StaffSchedulePage() {
                 }
               }}
               className={`
-                aspect-square border rounded flex flex-col items-center justify-center text-sm relative
-                ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white cursor-pointer hover:bg-sky-50'}
-                ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
+                min‑h‑12 min‑w‑12 md:min‑h‑14 md:min‑w‑14
+                border rounded flex flex‑col items‑center justify‑center text‑sm relative
+                ${day.isOtherMonth ? 'bg‑gray‑100 text‑gray‑400' : 'bg‑white cursor‑pointer hover:bg‑sky‑50'}
+                ${isSelected ? 'bg‑sky‑100 border‑sky‑400' : ''}
               `}
             >
               {day.dayNum}
+              {/* ✅修复圆点：增加right‑1，不会跑出格子外面，手机可见 */}
               {day.hasSchedule && !day.isOtherMonth && (
-                <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                <span className="absolute bottom‑1 right‑1 w‑2 h‑2 rounded‑full bg‑orange‑500"></span>
               )}
             </div>
           )
@@ -188,27 +190,27 @@ export default function StaffSchedulePage() {
       </div>
 
       {/* 选中日期：当日Outlet + Job清单【手机看，简洁，无价格】 */}
-      <div className="mt-5">
+      <div className="mt‑5">
         {loading ? (
-          <div className="text-center text-gray-500 py-6">Loading schedule…</div>
+          <div className="text‑center text‑gray‑500 py‑6">Loading schedule…</div>
         ) : selectedDayItems ? (
-          <div className="bg-white border rounded p-3 shadow-sm">
-            <h2 className="font-semibold mb-2">📅 {selectedDayItems.dateStr}</h2>
+          <div className="bg‑white border rounded p‑3 shadow‑sm">
+            <h2 className="font‑semibold mb‑2">📅 {selectedDayItems.dateStr}</h2>
             {selectedDayItems.list.length === 0 ? (
-              <p className="text-gray-400">No jobs for this day</p>
+              <p className="text‑gray‑400">No jobs for this day</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space‑y‑2">
                 {selectedDayItems.list.map((item, i) => (
-                  <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
-                    <div className="font-medium">{item.branch_name}</div>
-                    <div className="text-sm text-gray-600">Job: {item.plan}</div>
+                  <div key={i} className="border‑l‑4 border‑sky‑400 pl‑3 py‑1">
+                    <div className="font‑medium">{item.branch_name}</div>
+                    <div className="text‑sm text‑gray‑600">Job: {item.plan}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center text-gray-400 py-4">Tap date (orange dot) to view jobs</div>
+          <div className="text‑center text‑gray‑400 py‑4">Tap date (orange dot) to view jobs</div>
         )}
       </div>
     </div>
