@@ -173,18 +173,15 @@ export default function StaffSchedulePage() {
                 }
               }}
               className={`
-                relative border rounded overflow-hidden cursor-pointer
+                relative border rounded overflow-hidden cursor-pointer aspect-square flex items-center justify-center
                 ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white hover:bg-sky-50'}
                 ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
               `}
             >
-              <div className="pt-[100%]"></div>
-              <div className="absolute inset-0 flex items-center justify-center text-sm">
-                {day.dayNum}
-              </div>
-              {/* 方案A：橘色实心圆，白色数字 */}
+              <span className="text-sm">{day.dayNum}</span>
+              {/* 方案A：橘色实心圆，白色数字，加高z-index */}
               {jobCount > 0 && !day.isOtherMonth && (
-                <span className="absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-orange-500 rounded-full z-10">
+                <span className="absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-orange-500 rounded-full z-50">
                   {jobCount}
                 </span>
               )}
