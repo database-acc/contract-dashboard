@@ -35,7 +35,6 @@ export default function StaffSchedulePage() {
   const fetchAssign = async () => {
     setLoading(true)
     const { data, error } = await supabase.from('bill_schedule_assign').select('*')
-    console.log('fetch result data:', data, 'error:', error)
     if (!error && data) {
       setAssignList(data as BillScheduleAssignRow[])
     }
@@ -59,12 +58,6 @@ export default function StaffSchedulePage() {
     })
     return map
   }, [assignList])
-
-  // ✅ 调试log放到dayMap后面，就不会报错
-  useEffect(()=>{
-    console.log('assignList:', assignList)
-    console.log('dayMap size:', dayMap.size)
-  },[assignList,dayMap])
 
   const calendarDays = useMemo(() => {
     const first = new Date(currentYear, currentMonth, 1)
