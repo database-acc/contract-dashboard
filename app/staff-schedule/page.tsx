@@ -141,16 +141,16 @@ export default function StaffSchedulePage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
   return (
-    <div className="min‑h‑screen bg‑gray‑50 p‑3 w‑full mx‑auto max‑w‑xl">
-      <h1 className="text‑xl font‑bold text‑center mb‑4">Staff Work Schedule</h1>
+    <div className="min-h-screen bg-gray-50 p-3 w-full mx-auto max-w-md">
+      <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
 
-      <div className="flex items‑center justify‑between mb‑3">
-        <button onClick={goPrev} className="px‑3 py‑1 bg‑gray‑200 rounded text‑sm">◀ Prev</button>
-        <div className="font‑semibold">{monthNames[currentMonth]} {currentYear}</div>
-        <button onClick={goNext} className="px‑3 py‑1 bg‑gray‑200 rounded text‑sm">Next ▶</button>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={goPrev} className="px-3 py-1 bg-gray-200 rounded text-sm">◀ Prev</button>
+        <div className="font-semibold">{monthNames[currentMonth]} {currentYear}</div>
+        <button onClick={goNext} className="px-3 py-1 bg-gray-200 rounded text-sm">Next ▶</button>
       </div>
 
-      <div className="grid grid‑cols‑7 gap‑1 mb‑2 text‑xs text‑center font‑medium text‑gray‑500">
+      <div className="grid grid-cols-7 gap-1 mb-2 text-xs text-center font-medium text-gray-500">
         <div>Su</div>
         <div>Mo</div>
         <div>Tu</div>
@@ -160,7 +160,7 @@ export default function StaffSchedulePage() {
         <div>Sa</div>
       </div>
 
-      <div className="grid grid‑cols‑7 gap‑1">
+      <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
           const jobCount = day.dayInfo?.count ?? 0
@@ -173,18 +173,18 @@ export default function StaffSchedulePage() {
                 }
               }}
               className={`
-                relative border rounded overflow‑hidden cursor‑pointer
-                ${day.isOtherMonth ? 'bg‑gray‑100 text‑gray‑400' : 'bg‑white hover:bg‑sky‑50'}
-                ${isSelected ? 'bg‑sky‑100 border‑sky‑400' : ''}
+                relative border rounded overflow-hidden cursor-pointer
+                ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white hover:bg-sky-50'}
+                ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
               `}
             >
-              <div className="pt‑[100%]"></div>
-              <div className="absolute inset‑0 flex items‑center justify‑center text‑sm">
+              <div className="pt-[100%]"></div>
+              <div className="absolute inset-0 flex items-center justify-center text-sm">
                 {day.dayNum}
               </div>
               {/* 方案A：橘色实心圆，白色数字 */}
               {jobCount > 0 && !day.isOtherMonth && (
-                <span className="absolute bottom‑0.5 right‑0.5 w‑4 h‑4 flex items‑center justify‑center text‑[10px] font‑bold text‑white bg‑orange‑500 rounded‑full z‑10">
+                <span className="absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-orange-500 rounded-full z-10">
                   {jobCount}
                 </span>
               )}
@@ -193,27 +193,27 @@ export default function StaffSchedulePage() {
         })}
       </div>
 
-      <div className="mt‑5">
+      <div className="mt-5">
         {loading ? (
-          <div className="text‑center text‑gray‑500 py‑6">Loading schedule…</div>
+          <div className="text-center text-gray-500 py-6">Loading schedule…</div>
         ) : selectedDayItems ? (
-          <div className="bg‑white border rounded p‑3 shadow‑sm">
-            <h2 className="font‑semibold mb‑2">📅 {selectedDayItems.dateStr}</h2>
+          <div className="bg-white border rounded p-3 shadow-sm">
+            <h2 className="font-semibold mb-2">📅 {selectedDayItems.dateStr}</h2>
             {selectedDayItems.list.length === 0 ? (
-              <p className="text‑gray‑400">No jobs for this day</p>
+              <p className="text-gray-400">No jobs for this day</p>
             ) : (
-              <div className="space‑y‑2">
+              <div className="space-y-2">
                 {selectedDayItems.list.map((item, i) => (
-                  <div key={i} className="border‑l‑4 border‑sky‑400 pl‑3 py‑1">
-                    <div className="font‑medium">{item.branch_name}</div>
-                    <div className="text‑sm text‑gray‑600">Job: {item.plan}</div>
+                  <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
+                    <div className="font-medium">{item.branch_name}</div>
+                    <div className="text-sm text-gray-600">Job: {item.plan}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
         ) : (
-          <div className="text‑center text‑gray‑400 py‑4">Tap date (orange badge) to view jobs</div>
+          <div className="text-center text-gray-400 py-4">Tap date (orange badge) to view jobs</div>
         )}
       </div>
     </div>
