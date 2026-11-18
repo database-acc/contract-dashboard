@@ -139,7 +139,7 @@ export default function StaffSchedulePage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3 max-w-md mx-auto">
+    <div className="min-h-screen bg-gray-50 p-3 w-full mx-auto max-w-xl">
       <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
 
       <div className="flex items-center justify-between mb-3">
@@ -161,7 +161,6 @@ export default function StaffSchedulePage() {
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
-
           return (
             <div
               key={idx}
@@ -171,15 +170,18 @@ export default function StaffSchedulePage() {
                 }
               }}
               className={`
-                aspect-square border rounded flex items-center justify-center text-sm relative
-                ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white cursor-pointer hover:bg-sky-50'}
+                relative border rounded overflow-hidden cursor-pointer
+                ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white hover:bg-sky-50'}
                 ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
               `}
             >
-              {day.dayNum}
-
+              {/* 用padding-top 100%实现正方形格子，替代 aspect‑square，修复iOS圆点裁剪 */}
+              <div className="pt-[100%]"></div>
+              <div className="absolute inset-0 flex items-center justify-center text-sm">
+                {day.dayNum}
+              </div>
               {day.hasSchedule && !day.isOtherMonth && (
-                <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-orange-500 z-10"></span>
               )}
             </div>
           )
