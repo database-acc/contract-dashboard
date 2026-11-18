@@ -22,6 +22,7 @@ type BillScheduleAssignRow = {
 type DayItem = {
   dateStr: string
   list: Array<{ branch_name: string; plan: string }>
+  count: number
 }
 
 export default function StaffSchedulePage() {
@@ -49,10 +50,11 @@ export default function StaffSchedulePage() {
     assignList.forEach((row) => {
       if (!row.schedule_date) return
       if (!map.has(row.schedule_date)) {
-        map.set(row.schedule_date, { dateStr: row.schedule_date, list: [] })
+        map.set(row.schedule_date, { dateStr: row.schedule_date, list: [], count: 0 })
       }
       const item = map.get(row.schedule_date)!
       item.list.push({ branch_name: row.branch_name, plan: row.plan })
+      item.count += 1
     })
     return map
   }, [assignList])
@@ -66,7 +68,7 @@ export default function StaffSchedulePage() {
       dayNum: number
       dateObj: Date
       dateStr: string
-      hasSchedule: boolean
+      dayInfo: DayItem | undefined
       isOtherMonth: boolean
     }> = []
 
@@ -78,7 +80,7 @@ export default function StaffSchedulePage() {
         dayNum: d.getDate(),
         dateObj: d,
         dateStr: ds,
-        hasSchedule: dayMap.has(ds),
+        dayInfo: dayMap.get(ds),
         isOtherMonth: true,
       })
     }
@@ -90,7 +92,7 @@ export default function StaffSchedulePage() {
         dayNum: d,
         dateObj,
         dateStr: ds,
-        hasSchedule: dayMap.has(ds),
+        dayInfo: dayMap.get(ds),
         isOtherMonth: false,
       })
     }
@@ -103,7 +105,7 @@ export default function StaffSchedulePage() {
         dayNum: nextD.getDate(),
         dateObj: nextD,
         dateStr: ds,
-        hasSchedule: dayMap.has(ds),
+        dayInfo: dayMap.get(ds),
         isOtherMonth: true,
       })
     }
@@ -161,6 +163,7 @@ export default function StaffSchedulePage() {
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
+          const jobCount = day.dayInfo?.count ?? 0
           return (
             <div
               key={idx}
@@ -175,13 +178,16 @@ export default function StaffSchedulePage() {
                 ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
               `}
             >
-              {/* 用padding-top 100%实现正方形格子，替代 aspect‑square，修复iOS圆点裁剪 */}
               <div className="pt-[100%]"></div>
+              {/* 日期数字，居中，和电脑版样式对齐 */}
               <div className="absolute inset-0 flex items-center justify-center text-sm">
                 {day.dayNum}
               </div>
-              {day.hasSchedule && !day.isOtherMonth && (
-                <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-orange-500 z-10"></span>
+              {/* ✅橘色数字，右下角，显示job数量，0就不渲染 */}
+              {jobCount > 0 && !day.isOtherMonth && (
+                <span className="absolute bottom-0.5 right-1 text-xs font-bold text-orange-500 z-10">
+                  {jobCount}
+                </span>
               )}
             </div>
           )
@@ -208,7 +214,7 @@ export default function StaffSchedulePage() {
             )}
           </div>
         ) : (
-          <div className="text-center text-gray-400 py-4">Tap date (orange dot) to view jobs</div>
+          <div className="text-center text-gray-400 py-4">Tap date (orange number) to view jobs</div>
         )}
       </div>
     </div>
