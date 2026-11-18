@@ -578,7 +578,7 @@ export default function DashboardStateWrapper({
           onClick={() => setSideOpen(false)}
           className="block mt-1 bg-sky-500 text-white px-3 py-2 rounded text-sm hover:bg-sky-600 transition-colours text-center mx-4"
         >
-          Staff Mobile Schedule
+          Staff Work Schedule
         </a>
 
         <button
