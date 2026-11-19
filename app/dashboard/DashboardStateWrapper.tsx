@@ -758,13 +758,14 @@ export default function DashboardStateWrapper({
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[220px]">Branch Name</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium w-[160px] whitespace-nowrap">Plan (Schedule)</th>
                 <th className="border border-slate-600 px-3 py-2 text-left font-medium">Schedule Date</th>
-                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Done / Status</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Service</th>
+                <th className="border border-slate-600 px-3 py-2 text-left font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {combinedList.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
+                  <td colSpan={6} className="border border-gray-200 px-3 py-6 text-center text-gray-400">
                     No CONTRACT / WARRANTY job for this month
                   </td>
                 </tr>
@@ -864,7 +865,7 @@ export default function DashboardStateWrapper({
                         </div>
                       </td>
 
-                      {/* Done / Status 列 ———— 修改后：badge与状态同一行 */}
+                      {/* ========== Service 新列 ========== */}
                       <td className="border border-gray-200 px-3 py-2">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {item.doneJobs.length === 0 ? (
@@ -901,7 +902,12 @@ export default function DashboardStateWrapper({
                               )
                             })
                           )}
+                        </div>
+                      </td>
 
+                      {/* ========== Status 新列 ========== */}
+                      <td className="border border-gray-200 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {allDone ? (
                             hasLate ? (
                               <span className="relative text-orange-600 font-semibold cursor-help group text-xs">
