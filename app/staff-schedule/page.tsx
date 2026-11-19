@@ -158,7 +158,7 @@ export default function StaffSchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 w-full mx-auto max-w-md">
-      <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
+      <h1 className="text-xl font-bold text-center mb-4">JWE Work Schedule</h1>
 
       <div className="flex items-center justify-between mb-3">
         <button onClick={goPrev} className="px-3 py-1 bg-gray-200 rounded text-sm">◀ Prev</button>
