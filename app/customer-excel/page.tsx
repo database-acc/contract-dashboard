@@ -6,12 +6,8 @@ import dynamic from 'next/dynamic'
 import CustomerExcelTable from './CustomerExcelTable'
 
 // 动态导入客户端美化组件，关闭SSR
-const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
-  ssr: false
-})
-const UnauthorizedPage = dynamic(() => import('@/app/components/UnauthorizedPage'), {
-  ssr: false
-})
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'))
+const UnauthorizedPage = dynamic(() => import('@/app/components/UnauthorizedPage'))
 
 type ContractBranchRow = {
   id: bigint

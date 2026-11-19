@@ -2,9 +2,7 @@ import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import AnnualTableDataLoader from './AnnualTableDataLoader'
 
-const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
-  ssr: false
-})
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'))
 
 type SearchParams = Promise<{ year?: string }>
 

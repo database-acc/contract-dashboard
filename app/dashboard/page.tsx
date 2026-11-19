@@ -7,9 +7,7 @@ import dynamic from 'next/dynamic'
 import DashboardStateWrapper from './DashboardStateWrapper'
 
 // 动态导入 Client 组件 Loading
-const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
-  ssr: false
-})
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'))
 
 // contract_branch 表类型
 type ContractBranchRow = {
