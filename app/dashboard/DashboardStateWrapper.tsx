@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo, ReactNode, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import FullScreenLoading from '../components/FullScreenLoading'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -199,6 +200,7 @@ export default function DashboardStateWrapper({
   const [serviceFilter, setServiceFilter] = useState<'all' | 'GWM' | 'KPM' | 'KPS' | 'GTC'>('all')
 
   const [sideOpen, setSideOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // ========== Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
@@ -209,11 +211,18 @@ export default function DashboardStateWrapper({
   const editingCellRef = useRef<HTMLTableCellElement | null>(null)
 
   const loadScheduleAssign = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("bill_schedule_assign")
-      .select("*")
-    if (!error && data) {
-      setScheduleAssignList(data as BillScheduleAssignRow[])
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from("bill_schedule_assign")
+        .select("*")
+      if (!error && data) {
+        setScheduleAssignList(data as BillScheduleAssignRow[])
+      }
+    } catch (err) {
+      console.error('load schedule assign error', err)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
@@ -533,6 +542,7 @@ export default function DashboardStateWrapper({
 
   return (
     <div className="w-full relative">
+      <FullScreenLoading show={isLoading} text="Loading..." />
       {/* Side Drawer */}
       <div
         className={`fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50 flex flex-col gap-3 pt-20 transition-transform duration-300 ease-in-out ${
