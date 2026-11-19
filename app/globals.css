@@ -14,8 +14,8 @@
 }
 
 @theme {
-  --color-cbtl: var(--cbtl);
-  --color-nandos: var(--nandos);
+  --color-cbtl: #e9e5f8;
+  --color-nandos: #ffe9d8;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -32,7 +32,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -49,18 +49,18 @@ th, td {
   border-color: #374151;
 }
 th {
-  background-color: #f3f4f6;
+  background-color: var(--color-light);
   font-weight: 500;
 }
 .dark th {
   background-color: #1f2937;
 }
 
-/* ========== 修复 sticky 表头模糊【重点修改这里】 ========== */
+/* ========== 修复 sticky 表头模糊 ========== */
 thead th {
   position: sticky;
   top: 0;
-  background: #f3f4f6;
+  background: var(--color-light);
   z-index: 10;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -76,7 +76,7 @@ thead th {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--color-light);
 }
 .dark ::-webkit-scrollbar-track {
   background: #1f2937;
