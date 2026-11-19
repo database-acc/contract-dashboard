@@ -603,7 +603,7 @@ export default function DashboardStateWrapper({
             onClick={() => setSideOpen(false)}
             className="block mt-1 bg-sky-500 text-white px-3 py-2 rounded text-sm hover:bg-sky-600 transition-colors text-center mx-4"
           >
-            Staff Work Schedule
+            Technician Job Calendar
           </a>
         )}
 
