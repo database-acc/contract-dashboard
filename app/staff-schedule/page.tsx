@@ -25,20 +25,18 @@ type DayItem = {
   count: number
 }
 
-function extractYmd(raw: string | null | undefined): string {
-  if (!raw) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    return raw
-  }
-  if (raw.length >= 10 && raw[4] === '-' && raw[7] === '-') {
-    return raw.slice(0, 10)
-  }
-  const d = new Date(raw)
-  if (isNaN(d.getTime())) return ''
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+// 直接用 year,month,day 拼成 yyyy-mm-dd
+function makeKey(y:number, m:number, d:number) {
+  const yy = String(y)
+  const mm = String(m).padStart(2,'0')
+  const dd = String(d).padStart(2,'0')
+  return `${yy}-${mm}-${dd}`
+}
+
+// 马来西亚格式 DD/MM/YYYY
+function formatMyDate(isoStr: string) {
+  const [y, m, d] = isoStr.split('-')
+  return `${d}/${m}/${y}`
 }
 
 export default function StaffSchedulePage() {
@@ -64,8 +62,14 @@ export default function StaffSchedulePage() {
   const dayMap = useMemo(() => {
     const map = new Map<string, DayItem>()
     assignList.forEach((row) => {
-      const dateKey = extractYmd(row.schedule_date)
-      if (!dateKey) return
+      if(!row.schedule_date) return
+      // 拆分 schedule_date 字符串，不经过Date！！
+      const [yStr, mStr, dStr] = row.schedule_date.split('-')
+      const y = Number(yStr)
+      const m = Number(mStr)
+      const d = Number(dStr)
+      const dateKey = makeKey(y,m,d)
+
       if (!map.has(dateKey)) {
         map.set(dateKey, { dateStr: dateKey, list: [], count: 0 })
       }
@@ -77,61 +81,36 @@ export default function StaffSchedulePage() {
   }, [assignList])
 
   const calendarDays = useMemo(() => {
-    const first = new Date(currentYear, currentMonth, 1)
-    const last = new Date(currentYear, currentMonth + 1, 0)
-    const startWeekDay = first.getDay()
+    const firstDayOfMonth = new Date(currentYear, currentMonth, 1)
+    const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0)
+    const weekStart = firstDayOfMonth.getDay()
     const days: Array<{
       dayNum: number
-      dateObj: Date
       dateStr: string
       dayInfo: DayItem | undefined
       isOtherMonth: boolean
     }> = []
 
-    for (let i = startWeekDay - 1; i >= 0; i--) {
-      const d = new Date(first)
-      d.setDate(first.getDate() - (i + 1))
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      const ds = `${y}-${m}-${day}`
-      days.push({
-        dayNum: d.getDate(),
-        dateObj: d,
-        dateStr: ds,
-        dayInfo: dayMap.get(ds),
-        isOtherMonth: true,
-      })
+    // 上月尾巴
+    for (let i = weekStart - 1; i >= 0; i--) {
+      const dObj = new Date(currentYear, currentMonth, 1 - (i + 1))
+      const ds = makeKey(dObj.getFullYear(), dObj.getMonth()+1, dObj.getDate())
+      days.push({ dayNum: dObj.getDate(), dateStr: ds, dayInfo: dayMap.get(ds), isOtherMonth: true })
     }
 
-    for (let d = 1; d <= last.getDate(); d++) {
-      const dateObj = new Date(currentYear, currentMonth, d)
-      const y = dateObj.getFullYear()
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0')
-      const day = String(d).padStart(2, '0')
-      const ds = `${y}-${m}-${day}`
-      days.push({
-        dayNum: d,
-        dateObj,
-        dateStr: ds,
-        dayInfo: dayMap.get(ds),
-        isOtherMonth: false,
-      })
+    // ✅ 当月：直接拼字符串 currentYear, currentMonth+1, day
+    for (let d = 1; d <= lastDayOfMonth.getDate(); d++) {
+      const ds = makeKey(currentYear, currentMonth+1, d)
+      days.push({ dayNum: d, dateStr: ds, dayInfo: dayMap.get(ds), isOtherMonth: false })
     }
 
+    // 下月补齐格子
+    let addDay = 1
     while (days.length < 42) {
-      const nextD = new Date(currentYear, currentMonth + 1, days.length - startWeekDay + 1)
-      const y = nextD.getFullYear()
-      const m = String(nextD.getMonth() + 1).padStart(2, '0')
-      const day = String(nextD.getDate()).padStart(2, '0')
-      const ds = `${y}-${m}-${day}`
-      days.push({
-        dayNum: nextD.getDate(),
-        dateObj: nextD,
-        dateStr: ds,
-        dayInfo: dayMap.get(ds),
-        isOtherMonth: true,
-      })
+      const dObj = new Date(currentYear, currentMonth + 1, addDay)
+      const ds = makeKey(dObj.getFullYear(), dObj.getMonth()+1, dObj.getDate())
+      days.push({ dayNum: dObj.getDate(), dateStr: ds, dayInfo: dayMap.get(ds), isOtherMonth: true })
+      addDay++
     }
     return days
   }, [currentYear, currentMonth, dayMap])
@@ -173,7 +152,7 @@ export default function StaffSchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 w-full max-w-md mx-auto">
-      <h1 className="text-xl font-bold text-center mb-4">Technician Work Schedule</h1>
+      <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
 
       <div className="flex items-center justify-between mb-3">
         <button onClick={goPrev} className="px-3 py-1 bg-gray-200 rounded text-sm">◀ Prev</button>
@@ -223,7 +202,7 @@ export default function StaffSchedulePage() {
       <div className="mt-5">
         {selectedDayData ? (
           <div className="bg-white border rounded p-3 shadow-sm">
-            <h2 className="font-semibold mb-2">📅 {selectedDayData.dateStr}</h2>
+            <h2 className="font-semibold mb-2">📅 {formatMyDate(selectedDayData.dateStr)}</h2>
             <div className="space-y-2">
               {selectedDayData.list.map((item, i) => (
                 <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
@@ -237,11 +216,6 @@ export default function StaffSchedulePage() {
           <div className="text-center text-gray-400 py-4">Tap date (orange badge) to view jobs</div>
         )}
       </div>
-
-      {/* ✅ 调试打印！重点在这里 */}
-      <pre className="text-xs mt-6 text-red-500 whitespace-pre-wrap border p-2">
-        {JSON.stringify(assignList.map(r => ({ raw: r.schedule_date, extracted: extractYmd(r.schedule_date) })), null, 2)}
-      </pre>
     </div>
   )
 }
