@@ -185,6 +185,31 @@ type BillInfo = {
   projectType: string
 }
 
+// ========== Excel 导出配色（与网页 badge / 状态一致） ==========
+// 服务 badge：浅底 + 深字（exceljs argb = FF + 6位色号）
+const JOB_BADGE_STYLE: Record<string, { fill: string; font: string }> = {
+  GWM: { fill: 'FFE0F2FE', font: 'FF0369A1' },
+  KPS: { fill: 'FFD1FAE5', font: 'FF047857' },
+  KPM: { fill: 'FFEDE9FE', font: 'FF6D28D9' },
+  GTC: { fill: 'FFFEF3C7', font: 'FFB45309' },
+}
+const DEFAULT_BADGE = { fill: 'FFF1F5F9', font: 'FF334155' }
+
+// 状态配色
+const STATUS_STYLE: Record<'ontime' | 'late' | 'partial' | 'notstart', { fill: string; font: string; label: string }> = {
+  ontime:    { fill: 'FFDCFCE7', font: 'FF16A34A', label: '✅ On Time' },
+  late:      { fill: 'FFFEF3E2', font: 'FFEA580C', label: '✅ Done (Late)' },
+  partial:   { fill: 'FFFEF3E2', font: 'FFEA580C', label: '⏳ Partial Done' },
+  notstart:  { fill: 'FFFEE2E2', font: 'FFDC2626', label: '❌ Not Start' },
+}
+
+const EXPORT_BORDER = {
+  top: { style: 'thin' as const, color: { argb: 'FFCBD5E1' } },
+  bottom: { style: 'thin' as const, color: { argb: 'FFCBD5E1' } },
+  left: { style: 'thin' as const, color: { argb: 'FFCBD5E1' } },
+  right: { style: 'thin' as const, color: { argb: 'FFCBD5E1' } },
+}
+
 export default function DashboardStateWrapper({
   rawBranchData,
   rawBillsData,
@@ -201,6 +226,7 @@ export default function DashboardStateWrapper({
 
   const [sideOpen, setSideOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
 
   // ========== Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
@@ -312,8 +338,128 @@ export default function DashboardStateWrapper({
   const handleRefresh = () => {
     window.location.reload()
   }
-  const handleExportExcel = () => {
-    alert('Export Excel function')
+
+  // ========== 导出 Excel（与当前页面筛选后的表格一致） ==========
+  const handleExportExcel = async () => {
+    setIsExporting(true)
+    try {
+      // 动态导入 exceljs，避免 Vercel 打包时带入 node 内置模块
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+
+      // 文件名 / Sheet 名：Customer_Service_Schedule_Year
+      const customerLabel = customerFilter === 'all' ? 'AllCustomer' : customerFilter.replace(/[^A-Za-z0-9]/g, '')
+      const serviceLabel = serviceFilter === 'all' ? 'AllService' : serviceFilter
+      const sheetName = `${serviceLabel} ${customerLabel} ${year}`.slice(0, 31)
+      const ws = wb.addWorksheet(sheetName, {
+        views: [{ state: 'frozen', xSplit: 1, ySplit: 2 }],
+      })
+
+      const headers = ['No.', 'Branch Name', 'Plan (Schedule)', 'Schedule Date', 'Service', 'Status']
+      const colCount = headers.length
+
+      // 标题行
+      const titleRow = ws.addRow([`Monthly Schedule - ${customerLabel} - ${serviceLabel} - ${year}`])
+      ws.mergeCells(1, 1, 1, colCount)
+      titleRow.getCell(1).font = { bold: true, size: 13 }
+      titleRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
+
+      // 表头行
+      const headerRow = ws.addRow(headers)
+      headerRow.eachCell((cell, ci) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+        cell.font = { bold: true }
+        cell.border = EXPORT_BORDER
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        if (ci === 1) cell.alignment = { horizontal: 'left', vertical: 'middle' }
+      })
+
+      // 数据行
+      combinedList.forEach((item, idx) => {
+        const allDone = item.planJobs.every(j => item.doneJobs.includes(j))
+        const someDone = item.planJobs.some(j => item.doneJobs.includes(j))
+        const hasLate = item.lateJobs.length > 0
+
+        // Plan
+        const planText = item.planJobs.join(' / ')
+        // Schedule Date：逐 job 拼接
+        const scheduleText = item.planJobs
+          .map(job => {
+            const assignInfo = getAssignInfo(item.branch_name, job, year, activeMonth)
+            return `${job}: ${assignInfo?.schedule_date ?? '-'}`
+          })
+          .join(' | ')
+        // Service
+        const serviceText = item.doneJobs.length > 0 ? item.doneJobs.join(' / ') : '-'
+        // Status 判定（与页面一致）
+        let statusKey: keyof typeof STATUS_STYLE
+        if (allDone) statusKey = hasLate ? 'late' : 'ontime'
+        else if (someDone) statusKey = 'partial'
+        else statusKey = 'notstart'
+        const statusStyle = STATUS_STYLE[statusKey]
+
+        const row = ws.addRow([idx + 1, item.branch_name, planText, scheduleText, serviceText, statusStyle.label])
+
+        // 逐格样式
+        row.getCell(1).border = EXPORT_BORDER
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }
+
+        row.getCell(2).border = EXPORT_BORDER
+        row.getCell(2).font = { bold: true }
+        row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' }
+
+        row.getCell(3).border = EXPORT_BORDER
+        row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+
+        row.getCell(4).border = EXPORT_BORDER
+        row.getCell(4).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+
+        // Service 单元格：按第一个 job 上 badge 配色
+        const firstJob = item.doneJobs[0] ?? item.planJobs[0]
+        const badge = JOB_BADGE_STYLE[firstJob] ?? DEFAULT_BADGE
+        const serviceCell = row.getCell(5)
+        serviceCell.border = EXPORT_BORDER
+        serviceCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: badge.fill } }
+        serviceCell.font = { bold: true, color: { argb: badge.font } }
+        serviceCell.alignment = { horizontal: 'left', vertical: 'middle' }
+
+        // Status 单元格：按状态配色
+        const statusCell = row.getCell(6)
+        statusCell.border = EXPORT_BORDER
+        statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: statusStyle.fill } }
+        statusCell.font = { bold: true, color: { argb: statusStyle.font } }
+        statusCell.alignment = { horizontal: 'left', vertical: 'middle' }
+
+        row.height = 24
+      })
+
+      // 列宽
+      ws.getColumn(1).width = 6
+      ws.getColumn(2).width = 34
+      ws.getColumn(3).width = 18
+      ws.getColumn(4).width = 42
+      ws.getColumn(5).width = 16
+      ws.getColumn(6).width = 18
+
+      const buffer = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      // 例：CBTL_KPS_Schedule_2026.xlsx
+      a.download = `${customerLabel}_${serviceLabel}_Schedule_${year}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Export Excel error:', err)
+      alert('Export failed, please check console log')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const jobBadgeClass = (job: string, isDone: boolean, isLate: boolean, isMultiMonth: boolean, isWarranty: boolean) => {
@@ -740,9 +886,12 @@ export default function DashboardStateWrapper({
           <button
             type="button"
             onClick={handleExportExcel}
-            className="bg-blue-600 text-white px-2 py-0.5 rounded text-sm hover:bg-blue-700 transition-colors shadow-sm"
+            disabled={isExporting}
+            className={`px-2 py-0.5 rounded text-sm transition-colors shadow-sm text-white ${
+              isExporting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
-            ↓ Export Excel
+            {isExporting ? 'Generating...' : '↓ Export Excel'}
           </button>
           {children}
         </div>
