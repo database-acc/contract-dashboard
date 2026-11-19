@@ -86,14 +86,10 @@ export default function CustomerExcelTable({ rawData }: Props) {
       if (!brand) return
       const region = getRegion(row.state ?? '')
       monthList.forEach((m, mi) => {
-        const price = row[`${m.key}_price` as keyof ContractBranchRow]
-        const midnight = row[`${m.key}_midnight` as keyof ContractBranchRow]
-        const outstation = row[`${m.key}_outstation` as keyof ContractBranchRow]
-        // ✅ 修复 TS 2365 报错：全部转成 number 再相加
-        const p = Number(price ?? 0)
-        const mVal = Number(midnight ?? 0)
-        const o = Number(outstation ?? 0)
-        matrix[brand][region][mi] += p + mVal + o
+        const price = Number(row[`${m.key}_price` as keyof ContractBranchRow] ?? 0) || 0
+        const midnight = Number(row[`${m.key}_midnight` as keyof ContractBranchRow] ?? 0) || 0
+        const outstation = Number(row[`${m.key}_outstation` as keyof ContractBranchRow] ?? 0) || 0
+        matrix[brand][region][mi] += price + midnight + outstation
       })
     })
 
@@ -110,14 +106,14 @@ export default function CustomerExcelTable({ rawData }: Props) {
       const my = kl.map((v, i) => v + os[i])
       rows.push({ key: `${b}-KL`, label: `${b} KL`, kind: 'data', months: kl, annual: kl.reduce((s, v) => s + v, 0) })
       rows.push({ key: `${b}-OS`, label: `${b} OUTSTATION`, kind: 'data', months: os, annual: os.reduce((s, v) => s + v, 0) })
-      rows.push({ key: `${b}-MY`, label: `${b} MALAYSIA`, kind: 'malaysia', months: my, annual: my.reduce((s, v) => s + v, 0) })
+      rows.push({ key: `${b}-TOTAL`, label: `${b} TOTAL`, kind: 'brand-total', brand: b, months: my, annual: my.reduce((s, v) => s + v, 0) })
       my.forEach((v, i) => { malaysiaSum[i] += v })
     })
 
     if (presentBrands.length > 0) {
       rows.push({
         key: 'grand',
-        label: `${presentBrands.join(' + ')} MALAYSIA`,
+        label: 'All Outlets Total',
         kind: 'grand',
         months: malaysiaSum,
         annual: malaysiaSum.reduce((s, v) => s + v, 0),
@@ -412,25 +408,34 @@ export default function CustomerExcelTable({ rawData }: Props) {
         const headerRow2 = sheet.addRow(headerRow2Data)
         for (let c = 1; c <= colCount; c++) sheet.getCell(2, c).style = styleSubHeader
 
-        const styleMalaysia = {
-          fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FDE047' } } as const,
-          font: { bold: true },
+        // 品牌合计柔和底色（与页面一致）
+        const brandTotalFill: Record<BrandKey, string> = {
+          NANDOS: 'DDEFE7',
+          CBTL: 'DCE6F4',
+          TC: 'F3E8D8',
+        }
+        const grandFill = 'DDEFE7'
+
+        const makeStyle = (argb: string, bold: boolean) => ({
+          fill: { type: 'pattern', pattern: 'solid', fgColor: { argb } } as const,
+          font: { bold },
           border: borderAll,
           alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
-        }
-        const styleGrand = {
-          fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F59E0B' } } as const,
-          font: { bold: true, color: { argb: 'FFFFFFFF' } },
-          border: borderAll,
-          alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
-        }
+        })
 
         for (const row of overallRows) {
           const rowData: (string | number)[] = [row.label]
           row.months.forEach(v => rowData.push(v > 0 ? Number(v.toFixed(2)) : ''))
           rowData.push(row.annual > 0 ? Number(row.annual.toFixed(2)) : '')
           const dataRow = sheet.addRow(rowData)
-          const rowStyle = row.kind === 'malaysia' ? styleMalaysia : row.kind === 'grand' ? styleGrand : null
+
+          let rowStyle: ReturnType<typeof makeStyle> | null = null
+          if (row.kind === 'grand') {
+            rowStyle = makeStyle(grandFill, true)
+          } else if (row.kind === 'brand-total' && row.brand) {
+            rowStyle = makeStyle(brandTotalFill[row.brand], true)
+          }
+
           dataRow.eachCell((cell, ci) => {
             if (ci === 1) {
               cell.style = rowStyle ? { ...rowStyle, alignment: styleCellLeft.alignment } : styleCellLeft

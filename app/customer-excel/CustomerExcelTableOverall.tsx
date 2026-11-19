@@ -1,22 +1,32 @@
 import React from 'react'
 import { monthList, formatMoney2 } from './useAggregateOutletData'
-import type { OverallRow } from './types'
+import type { OverallRow, BrandKey } from './types'
 
 type Props = {
   rows: OverallRow[]
 }
 
+/** 品牌合计柔和底色（护眼，不刺眼） */
+const BRAND_TOTAL_FILL: Record<BrandKey, string> = {
+  NANDOS: '#DDEFE7', // 薄荷绿
+  CBTL: '#DCE6F4',  // 浅蓝
+  TC: '#F3E8D8',    // 预留：暖米色
+}
+
+/** 全品牌总计底色（柔和薄荷绿，与 Annual Total 列一致） */
+const GRAND_FILL = '#DDEFE7'
+
 /**
- * Overall Amount View：按 品牌 × 地区(KL / Outstation / Malaysia) 汇总每月金额
- * - data      : 普通明细行（KL / OUTSTATION）
- * - malaysia  : 品牌 Malaysia 合计行（黄底）
- * - grand     : 全部品牌 Malaysia 总计行（橙底）
+ * Overall Amount View：按 品牌 × 地区(KL / Outstation / Total) 汇总每月金额
+ * - data        : 普通明细行（KL / OUTSTATION）
+ * - brand-total : 品牌合计行（按品牌分色）
+ * - grand       : 全部品牌总计行（薄荷绿）
  */
 export default function CustomerExcelTableOverall({ rows }: Props) {
-  const rowStyle = (kind: OverallRow['kind']): React.CSSProperties => {
-    if (kind === 'malaysia') return { background: '#fde047', fontWeight: 700 }
-    if (kind === 'grand') return { background: '#f59e0b', fontWeight: 700, color: '#fff' }
-    return {}
+  const rowFill = (row: OverallRow): string | undefined => {
+    if (row.kind === 'grand') return GRAND_FILL
+    if (row.kind === 'brand-total' && row.brand) return BRAND_TOTAL_FILL[row.brand]
+    return undefined
   }
 
   return (
@@ -60,27 +70,35 @@ export default function CustomerExcelTableOverall({ rows }: Props) {
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={row.key} style={rowStyle(row.kind)} className="hover:bg-slate-50">
-            <td
-              className="border border-slate-200 p-2 whitespace-nowrap"
-              style={{ position: 'sticky', left: 0, zIndex: 12, ...rowStyle(row.kind) }}
-            >
-              {row.label}
-            </td>
-            {row.months.map((v, i) => (
+        {rows.map((row) => {
+          const fill = rowFill(row)
+          const isBold = row.kind !== 'data'
+          return (
+            <tr key={row.key} style={fill ? { background: fill, fontWeight: isBold ? 700 : 400 } : undefined}>
               <td
-                key={`${row.key}-${monthList[i].key}`}
-                className="border border-slate-200 p-2 text-right border-r-2 border-slate-400"
+                className="border border-slate-200 p-2 whitespace-nowrap"
+                style={{ position: 'sticky', left: 0, zIndex: 12, background: fill ?? '#fff' }}
               >
-                {formatMoney2(v)}
+                {row.label}
               </td>
-            ))}
-            <td className="border border-sky-200 p-2 text-right bg-sky-50 font-bold">
-              {formatMoney2(row.annual)}
-            </td>
-          </tr>
-        ))}
+              {row.months.map((v, i) => (
+                <td
+                  key={`${row.key}-${monthList[i].key}`}
+                  className="border border-slate-200 p-2 text-right border-r-2 border-slate-400"
+                >
+                  {formatMoney2(v)}
+                </td>
+              ))}
+              {/* Annual Total 列：跟随本行底色（总计行=薄荷绿，品牌合计=品牌色，明细=浅蓝） */}
+              <td
+                className="border border-sky-200 p-2 text-right font-bold"
+                style={{ background: fill ?? '#f0f9ff' }}
+              >
+                {formatMoney2(row.annual)}
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

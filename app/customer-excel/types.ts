@@ -75,7 +75,9 @@ export type BrandKey = 'NANDOS' | 'CBTL' | 'TC'
 export type OverallRow = {
   key: string
   label: string
-  kind: 'data' | 'malaysia' | 'grand'
+  kind: 'data' | 'brand-total' | 'grand'
+  /** brand-total 行所属品牌，用于区分品牌合计底色 */
+  brand?: BrandKey
   /** 12 个月金额，0 表示当月无数据（页面留空） */
   months: number[]
   annual: number
