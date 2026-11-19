@@ -3,10 +3,18 @@ import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import CustomerExcelTableFull from './CustomerExcelTableFull'
 import CustomerExcelTableSummary from './CustomerExcelTableSummary'
-import { useAggregateOutletData, monthList, getServiceType } from './useAggregateOutletData'
-import type { ContractBranchRow } from './types'
+import CustomerExcelTableOverall from './CustomerExcelTableOverall'
+import {
+  useAggregateOutletData,
+  monthList,
+  getServiceType,
+  getBrandKey,
+  getRegion,
+  BRAND_ORDER,
+} from './useAggregateOutletData'
+import type { ContractBranchRow, OverallRow, BrandKey } from './types'
 
-type ViewMode = 'full' | 'job-summary' | 'price'
+type ViewMode = 'full' | 'job-summary' | 'price' | 'overall'
 type Props = {
   rawData: ContractBranchRow[]
 }
@@ -65,6 +73,59 @@ export default function CustomerExcelTable({ rawData }: Props) {
 
   const groupedRows = useAggregateOutletData(filteredData)
 
+  // ========== Overall Amount View 聚合：品牌 × 地区 × 月份 ==========
+  const overallRows = useMemo<OverallRow[]>(() => {
+    const matrix: Record<BrandKey, { KL: number[]; OUTSTATION: number[] }> = {
+      NANDOS: { KL: Array(12).fill(0), OUTSTATION: Array(12).fill(0) },
+      CBTL: { KL: Array(12).fill(0), OUTSTATION: Array(12).fill(0) },
+      TC: { KL: Array(12).fill(0), OUTSTATION: Array(12).fill(0) },
+    }
+
+    filteredData.forEach(row => {
+      const brand = getBrandKey(row.branch_name)
+      if (!brand) return
+      const region = getRegion(row.state ?? '')
+      monthList.forEach((m, mi) => {
+        const price = row[`${m.key}_price` as keyof ContractBranchRow]
+        const midnight = row[`${m.key}_midnight` as keyof ContractBranchRow]
+        const outstation = row[`${m.key}_outstation` as keyof ContractBranchRow]
+        // ✅ 修复 TS 2365 报错：全部转成 number 再相加
+        const p = Number(price ?? 0)
+        const mVal = Number(midnight ?? 0)
+        const o = Number(outstation ?? 0)
+        matrix[brand][region][mi] += p + mVal + o
+      })
+    })
+
+    const presentBrands = BRAND_ORDER.filter(
+      b => matrix[b].KL.some(v => v > 0) || matrix[b].OUTSTATION.some(v => v > 0)
+    )
+
+    const rows: OverallRow[] = []
+    const malaysiaSum: number[] = Array(12).fill(0)
+
+    presentBrands.forEach(b => {
+      const kl = matrix[b].KL
+      const os = matrix[b].OUTSTATION
+      const my = kl.map((v, i) => v + os[i])
+      rows.push({ key: `${b}-KL`, label: `${b} KL`, kind: 'data', months: kl, annual: kl.reduce((s, v) => s + v, 0) })
+      rows.push({ key: `${b}-OS`, label: `${b} OUTSTATION`, kind: 'data', months: os, annual: os.reduce((s, v) => s + v, 0) })
+      rows.push({ key: `${b}-MY`, label: `${b} MALAYSIA`, kind: 'malaysia', months: my, annual: my.reduce((s, v) => s + v, 0) })
+      my.forEach((v, i) => { malaysiaSum[i] += v })
+    })
+
+    if (presentBrands.length > 0) {
+      rows.push({
+        key: 'grand',
+        label: `${presentBrands.join(' + ')} MALAYSIA`,
+        kind: 'grand',
+        months: malaysiaSum,
+        annual: malaysiaSum.reduce((s, v) => s + v, 0),
+      })
+    }
+    return rows
+  }, [filteredData])
+
   const handleExport = async () => {
     setIsDownloading(true)
     try {
@@ -76,7 +137,7 @@ export default function CustomerExcelTable({ rawData }: Props) {
       const customerLabel = selectedCustomer === 'All' ? 'All' : selectedCustomer
       const sheetName = `${serviceLabel} ${customerLabel} ${year}`
       const sheet = workbook.addWorksheet(sheetName)
-      sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 2 }]
+      sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
 
       // 修复：as const 解决BorderStyle类型
       const borderAll = {
@@ -336,6 +397,49 @@ export default function CustomerExcelTable({ rawData }: Props) {
         totalRowData.push(grandTotalSum > 0 ? grandTotalSum : '')
         const grandRow = sheet.addRow(totalRowData)
         sheet.getRow(grandRow.number).eachCell(c => c.style = styleGrandTotal)
+      } else if (viewMode === 'overall') {
+        // ========== Overall Amount View 导出 ==========
+        const colCount = 1 + monthList.length + 1
+        const headerRow1Data: (string | number)[] = ['Brand / Region']
+        for (const m of monthList) headerRow1Data.push(m.label)
+        headerRow1Data.push('Annual Total')
+        const headerRow1 = sheet.addRow(headerRow1Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(1, c).style = styleHeader
+
+        const headerRow2Data: (string | number)[] = ['']
+        for (const m of monthList) headerRow2Data.push('Amount')
+        headerRow2Data.push('')
+        const headerRow2 = sheet.addRow(headerRow2Data)
+        for (let c = 1; c <= colCount; c++) sheet.getCell(2, c).style = styleSubHeader
+
+        const styleMalaysia = {
+          fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FDE047' } } as const,
+          font: { bold: true },
+          border: borderAll,
+          alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
+        }
+        const styleGrand = {
+          fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F59E0B' } } as const,
+          font: { bold: true, color: { argb: 'FFFFFFFF' } },
+          border: borderAll,
+          alignment: { horizontal: 'right' as const, vertical: 'middle' as const }
+        }
+
+        for (const row of overallRows) {
+          const rowData: (string | number)[] = [row.label]
+          row.months.forEach(v => rowData.push(v > 0 ? Number(v.toFixed(2)) : ''))
+          rowData.push(row.annual > 0 ? Number(row.annual.toFixed(2)) : '')
+          const dataRow = sheet.addRow(rowData)
+          const rowStyle = row.kind === 'malaysia' ? styleMalaysia : row.kind === 'grand' ? styleGrand : null
+          dataRow.eachCell((cell, ci) => {
+            if (ci === 1) {
+              cell.style = rowStyle ? { ...rowStyle, alignment: styleCellLeft.alignment } : styleCellLeft
+            } else {
+              cell.style = rowStyle ?? styleCellRight
+              cell.numFmt = '#,##0.00'
+            }
+          })
+        }
       }
 
       const buffer = await workbook.xlsx.writeBuffer()
@@ -387,6 +491,13 @@ export default function CustomerExcelTable({ rawData }: Props) {
               ${viewMode === 'price' ? 'bg-red-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'}`}
           >
             Price View
+          </button>
+          <button
+            onClick={() => setViewMode('overall')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors h-10
+              ${viewMode === 'overall' ? 'bg-red-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'}`}
+          >
+            Overall Amount View
           </button>
         </div>
 
@@ -443,6 +554,7 @@ export default function CustomerExcelTable({ rawData }: Props) {
         {viewMode === 'full' && <CustomerExcelTableFull groupedRows={groupedRows} />}
         {viewMode === 'job-summary' && <CustomerExcelTableSummary groupedRows={groupedRows} mode="job" />}
         {viewMode === 'price' && <CustomerExcelTableSummary groupedRows={groupedRows} mode="price" />}
+        {viewMode === 'overall' && <CustomerExcelTableOverall rows={overallRows} />}
       </div>
     </div>
   )

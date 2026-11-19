@@ -66,5 +66,17 @@ export type AggregatedRow = {
   group: string
   branch_name: string | null
   monthData: Record<string, OutletMonthData>
-  isDivider?: boolean   // ← 新增：OUTSTATION 分隔行标记
+  isDivider?: boolean   // ← OUTSTATION 分隔行标记
+}
+
+// ========== Overall Amount View 新增 ==========
+export type BrandKey = 'NANDOS' | 'CBTL' | 'TC'
+
+export type OverallRow = {
+  key: string
+  label: string
+  kind: 'data' | 'malaysia' | 'grand'
+  /** 12 个月金额，0 表示当月无数据（页面留空） */
+  months: number[]
+  annual: number
 }

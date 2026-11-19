@@ -1,6 +1,6 @@
 // useAggregateOutletData.ts
 import { useMemo } from 'react'
-import type { ContractBranchRow, AggregatedRow, OutletMonthData } from './types'
+import type { ContractBranchRow, AggregatedRow, OutletMonthData, BrandKey } from './types'
 
 export const monthList = [
   { key: 'jan', label: 'Jan' },
@@ -29,6 +29,29 @@ export function getServiceType(contractNo: string | null): 'KPS' | 'KPM' | 'GWM'
 export function formatNum(n: number): string {
   return n.toLocaleString('en-MY')
 }
+
+/** 两位小数金额；0 / 空值返回空字符串（页面与导出都留空） */
+export function formatMoney2(n: number): string {
+  if (!n || n <= 0) return ''
+  return n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** 品牌识别：按 branch_name 前缀 */
+export function getBrandKey(branchName: string | null): BrandKey | null {
+  const n = (branchName ?? '').trim()
+  if (n.startsWith('CBTL')) return 'CBTL'
+  if (n.startsWith("Nando") || n.startsWith('NDO')) return 'NANDOS'
+  if (n.startsWith('Texas') || n.startsWith('TC ')) return 'TC'
+  return null
+}
+
+/** 地区归类：KL + Selangor + Putrajaya 算 KL，其余算 OUTSTATION */
+export function getRegion(state: string | null): 'KL' | 'OUTSTATION' {
+  const st = (state ?? 'KL').trim()
+  return ['KL', 'Selangor', 'Putrajaya'].includes(st) ? 'KL' : 'OUTSTATION'
+}
+
+export const BRAND_ORDER: BrandKey[] = ['NANDOS', 'CBTL', 'TC']
 
 export function useAggregateOutletData(filteredData: ContractBranchRow[]): AggregatedRow[] {
   return useMemo(() => {
