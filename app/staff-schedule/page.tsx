@@ -25,7 +25,7 @@ type DayItem = {
   count: number
 }
 
-// 直接用 year,month,day 拼成 yyyy-mm-dd
+// 拼成 yyyy-mm-dd
 function makeKey(y:number, m:number, d:number) {
   const yy = String(y)
   const mm = String(m).padStart(2,'0')
@@ -63,11 +63,11 @@ export default function StaffSchedulePage() {
     const map = new Map<string, DayItem>()
     assignList.forEach((row) => {
       if(!row.schedule_date) return
-      // 拆分 schedule_date 字符串，不经过Date！！
-      const [yStr, mStr, dStr] = row.schedule_date.split('-')
-      const y = Number(yStr)
-      const m = Number(mStr)
+      // 优先用表里自带 schedule_year / schedule_month，只拿day
+      const dStr = row.schedule_date.split('-')[2]
       const d = Number(dStr)
+      const y = row.schedule_year
+      const m = row.schedule_month
       const dateKey = makeKey(y,m,d)
 
       if (!map.has(dateKey)) {
@@ -98,7 +98,7 @@ export default function StaffSchedulePage() {
       days.push({ dayNum: dObj.getDate(), dateStr: ds, dayInfo: dayMap.get(ds), isOtherMonth: true })
     }
 
-    // ✅ 当月：直接拼字符串 currentYear, currentMonth+1, day
+    // 当月格子 key
     for (let d = 1; d <= lastDayOfMonth.getDate(); d++) {
       const ds = makeKey(currentYear, currentMonth+1, d)
       days.push({ dayNum: d, dateStr: ds, dayInfo: dayMap.get(ds), isOtherMonth: false })
