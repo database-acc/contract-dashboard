@@ -95,7 +95,7 @@ async function DataLoader() {
 export default async function CustomerExcelPage() {
   return (
     <div className="p-6">
-      <Suspense fallback={<FullScreenLoading />}>
+      <Suspense fallback={<FullScreenLoading text="Loading data..." />}>
         <DataLoader />
       </Suspense>
     </div>

@@ -208,7 +208,7 @@ export default function DashboardStateWrapper({
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [tempScheduleDate, setTempScheduleDate] = useState<string>("")
   const [savingKey, setSavingKey] = useState<string | null>(null)
-  const editingCellRef = useRef<HTMLTableCellElement | null>(null)
+  const editingCellRefMap = useRef<Record<string, HTMLDivElement | null>>({})
 
   const loadScheduleAssign = useCallback(async () => {
     setIsLoading(true)
@@ -287,22 +287,27 @@ export default function DashboardStateWrapper({
     } finally {
       setSavingKey(null)
       setEditingKey(null)
-      editingCellRef.current = null
+      // 清空当前编辑key对应的ref
+      if (editingKey) {
+        editingCellRefMap.current[editingKey] = null
+      }
     }
   }
 
   // ✅ 用 mousedown 判断点击外部；点在当前编辑单元格内不关闭
   useEffect(() => {
     const handleMouseDownOutside = (e: MouseEvent) => {
-      if (!editingCellRef.current) return
-      if (!editingCellRef.current.contains(e.target as Node)) {
+      if (!editingKey) return
+      const currentDom = editingCellRefMap.current[editingKey]
+      if (!currentDom) return
+      if (!currentDom.contains(e.target as Node)) {
         setEditingKey(null)
-        editingCellRef.current = null
+        editingCellRefMap.current[editingKey] = null
       }
     }
     document.addEventListener("mousedown", handleMouseDownOutside)
     return () => document.removeEventListener("mousedown", handleMouseDownOutside)
-  }, [])
+  }, [editingKey])
 
   const handleRefresh = () => {
     window.location.reload()
@@ -798,18 +803,21 @@ export default function DashboardStateWrapper({
                         </div>
                       </td>
 
-                      {/* ✅ Schedule Date：现在【每一个plan单独编辑】，不再依赖docNo！ */}
-                      <td
-                        ref={editingCellRef}
-                        className="border border-gray-200 px-3 py-2 whitespace-nowrap relative"
-                      >
+                      {/* ✅ Schedule Date：现在【每一个plan单独编辑】，ref移入内层job循环，修复找不到job报错 */}
+                      <td className="border border-gray-200 px-3 py-2 whitespace-nowrap relative">
                         <div className="flex flex-wrap gap-2">
                           {item.planJobs.map(job => {
                             const editKey = `${item.branch_name}|${job}`
                             const assignInfo = getAssignInfo(item.branch_name, job, year, activeMonth)
                             const isEditingThis = editingKey === editKey
                             return (
-                              <div key={job} className="flex items-center gap-1">
+                              <div
+                                key={job}
+                                ref={(dom) => {
+                                  editingCellRefMap.current[editKey] = dom
+                                }}
+                                className="flex items-center gap-1"
+                              >
                                 {isEditingThis ? (
                                   <div
                                     className="flex gap-1 items-center"
@@ -832,7 +840,7 @@ export default function DashboardStateWrapper({
                                     <button
                                       onClick={() => {
                                         setEditingKey(null)
-                                        editingCellRef.current = null
+                                        editingCellRefMap.current[editKey] = null
                                       }}
                                       className="px-2 py-0.5 bg-gray-200 rounded text-xs hover:bg-gray-300"
                                     >

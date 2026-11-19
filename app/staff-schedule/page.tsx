@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import FullScreenLoading from '../components/FullScreenLoading'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -140,6 +141,10 @@ export default function StaffSchedulePage() {
 
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+  if (loading) {
+    return <FullScreenLoading text="Loading schedule…" />
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-3 w-full mx-auto max-w-md">
       <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
@@ -190,9 +195,7 @@ export default function StaffSchedulePage() {
       </div>
 
       <div className="mt-5">
-        {loading ? (
-          <div className="text-center text-gray-500 py-6">Loading schedule…</div>
-        ) : selectedDayItems ? (
+        {selectedDayItems ? (
           <div className="bg-white border rounded p-3 shadow-sm">
             <h2 className="font-semibold mb-2">📅 {selectedDayItems.dateStr}</h2>
             {selectedDayItems.list.length === 0 ? (

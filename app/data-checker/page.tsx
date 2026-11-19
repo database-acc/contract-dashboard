@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import FullScreenLoading from '../components/FullScreenLoading'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -227,9 +228,9 @@ export default function DataValidationChecker() {
     }
   }
 
-  // 鉴权中渲染loading
+  // 鉴权中渲染美化loading
   if(authChecking){
-    return <div className="min-h-screen flex items-center justify-center text-slate-500">Checking access...</div>
+    return <FullScreenLoading text="Checking access..." />
   }
 
   return (
