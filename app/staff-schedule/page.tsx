@@ -14,7 +14,7 @@ type BillScheduleAssignRow = {
   schedule_year: number
   schedule_month: number
   plan: string
-  schedule_date: string | null
+  schedule_date: string | null // YYYY-MM-DD
   editor_name: string
   editor_role: string
   edited_at: string
@@ -50,6 +50,7 @@ export default function StaffSchedulePage() {
     const map = new Map<string, DayItem>()
     assignList.forEach((row) => {
       if (!row.schedule_date) return
+      // 直接用数据库存的 YYYY-MM-DD 字符串作为key，不再经过toISOString转换，避免时区漂移
       if (!map.has(row.schedule_date)) {
         map.set(row.schedule_date, { dateStr: row.schedule_date, list: [], count: 0 })
       }
@@ -73,10 +74,15 @@ export default function StaffSchedulePage() {
       isOtherMonth: boolean
     }> = []
 
+    // 上月尾部填充
     for (let i = startWeekDay - 1; i >= 0; i--) {
       const d = new Date(currentYear, currentMonth, 1)
       d.setDate(d.getDate() - (i + 1))
-      const ds = d.toISOString().split('T')[0]
+      // ✅ 修复：手动拼接 YYYY-MM-DD，不用toISOString（UTC坑）
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const ds = `${y}-${m}-${day}`
       days.push({
         dayNum: d.getDate(),
         dateObj: d,
@@ -86,9 +92,13 @@ export default function StaffSchedulePage() {
       })
     }
 
+    // 当月日期
     for (let d = 1; d <= last.getDate(); d++) {
       const dateObj = new Date(currentYear, currentMonth, d)
-      const ds = dateObj.toISOString().split('T')[0]
+      const y = dateObj.getFullYear()
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0')
+      const day = String(dateObj.getDate()).padStart(2, '0')
+      const ds = `${y}-${m}-${day}`
       days.push({
         dayNum: d,
         dateObj,
@@ -98,10 +108,14 @@ export default function StaffSchedulePage() {
       })
     }
 
+    // 下月头部填充，补齐到42格
     const fillTotal = 42
     while (days.length < fillTotal) {
       const nextD = new Date(currentYear, currentMonth + 1, days.length - startWeekDay + 1)
-      const ds = nextD.toISOString().split('T')[0]
+      const y = nextD.getFullYear()
+      const m = String(nextD.getMonth() + 1).padStart(2, '0')
+      const day = String(nextD.getDate()).padStart(2, '0')
+      const ds = `${y}-${m}-${day}`
       days.push({
         dayNum: nextD.getDate(),
         dateObj: nextD,
