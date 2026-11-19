@@ -410,11 +410,11 @@ export default function CustomerExcelTable({ rawData }: Props) {
 
         // 品牌合计柔和底色（与页面一致）
         const brandTotalFill: Record<BrandKey, string> = {
-          NANDOS: 'fff7ed',
-          CBTL: 'f5f3ff',
-          TC: 'F3E8D8',
-        }
-        const grandFill = 'BAE6FD'
+        NANDOS: 'FFFFF7ED',
+        CBTL: 'FFF5F3FF',
+        TC: 'FFF3E8D8',
+       }
+        const grandFill = 'FFBAE6FD'
 
         const makeStyle = (argb: string, bold: boolean) => ({
           fill: { type: 'pattern', pattern: 'solid', fgColor: { argb } } as const,
