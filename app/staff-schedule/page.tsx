@@ -14,7 +14,7 @@ type BillScheduleAssignRow = {
   schedule_year: number
   schedule_month: number
   plan: string
-  schedule_date: string | null // YYYY-MM-DD
+  schedule_date: string | null
   editor_name: string
   editor_role: string
   edited_at: string
@@ -24,6 +24,25 @@ type DayItem = {
   dateStr: string
   list: Array<{ branch_name: string; plan: string }>
   count: number
+}
+
+// 工具函数：把任意日期字符串硬转成本地 YYYY-MM-DD
+function toLocalYmd(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+
+  // 如果已经是 YYYY-MM-DD，直接返回
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr
+  }
+
+  // 否则按本地时间解析，避免 UTC 漂移
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return ''
+
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function StaffSchedulePage() {
@@ -48,16 +67,20 @@ export default function StaffSchedulePage() {
 
   const dayMap = useMemo(() => {
     const map = new Map<string, DayItem>()
+
     assignList.forEach((row) => {
-      if (!row.schedule_date) return
-      // 直接用数据库存的 YYYY-MM-DD 字符串作为key，不再经过toISOString转换，避免时区漂移
-      if (!map.has(row.schedule_date)) {
-        map.set(row.schedule_date, { dateStr: row.schedule_date, list: [], count: 0 })
+      const dateKey = toLocalYmd(row.schedule_date)
+      if (!dateKey) return
+
+      if (!map.has(dateKey)) {
+        map.set(dateKey, { dateStr: dateKey, list: [], count: 0 })
       }
-      const item = map.get(row.schedule_date)!
+
+      const item = map.get(dateKey)!
       item.list.push({ branch_name: row.branch_name, plan: row.plan })
       item.count += 1
     })
+
     return map
   }, [assignList])
 
@@ -78,11 +101,12 @@ export default function StaffSchedulePage() {
     for (let i = startWeekDay - 1; i >= 0; i--) {
       const d = new Date(currentYear, currentMonth, 1)
       d.setDate(d.getDate() - (i + 1))
-      // ✅ 修复：手动拼接 YYYY-MM-DD，不用toISOString（UTC坑）
+
       const y = d.getFullYear()
       const m = String(d.getMonth() + 1).padStart(2, '0')
       const day = String(d.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
+
       days.push({
         dayNum: d.getDate(),
         dateObj: d,
@@ -95,10 +119,12 @@ export default function StaffSchedulePage() {
     // 当月日期
     for (let d = 1; d <= last.getDate(); d++) {
       const dateObj = new Date(currentYear, currentMonth, d)
+
       const y = dateObj.getFullYear()
       const m = String(dateObj.getMonth() + 1).padStart(2, '0')
       const day = String(dateObj.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
+
       days.push({
         dayNum: d,
         dateObj,
@@ -108,14 +134,16 @@ export default function StaffSchedulePage() {
       })
     }
 
-    // 下月头部填充，补齐到42格
+    // 下月头部填充，补齐到 42 格
     const fillTotal = 42
     while (days.length < fillTotal) {
       const nextD = new Date(currentYear, currentMonth + 1, days.length - startWeekDay + 1)
+
       const y = nextD.getFullYear()
       const m = String(nextD.getMonth() + 1).padStart(2, '0')
       const day = String(nextD.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
+
       days.push({
         dayNum: nextD.getDate(),
         dateObj: nextD,
@@ -183,6 +211,7 @@ export default function StaffSchedulePage() {
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
           const jobCount = day.dayInfo?.count ?? 0
+
           return (
             <div
               key={idx}
@@ -198,6 +227,7 @@ export default function StaffSchedulePage() {
               `}
             >
               <span className="text-sm">{day.dayNum}</span>
+
               {jobCount > 0 && !day.isOtherMonth && (
                 <span className="absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-orange-500 rounded-full z-50">
                   {jobCount}
@@ -212,6 +242,7 @@ export default function StaffSchedulePage() {
         {selectedDayItems ? (
           <div className="bg-white border rounded p-3 shadow-sm">
             <h2 className="font-semibold mb-2">📅 {selectedDayItems.dateStr}</h2>
+
             {selectedDayItems.list.length === 0 ? (
               <p className="text-gray-400">No jobs for this day</p>
             ) : (
