@@ -410,9 +410,9 @@ export default function CustomerExcelTable({ rawData }: Props) {
 
         // 品牌合计柔和底色（与页面一致）
         const brandTotalFill: Record<BrandKey, string> = {
-          NANDOS: 'DDEFE7',
-          CBTL: 'DCE6F4',
-          TC: 'F3E8D8',
+          NANDOS: '#fff7ed',
+          CBTL: '#f5f3ff',
+          TC: '#F3E8D8',
         }
         const grandFill = 'BAE6FD'
 
