@@ -414,7 +414,7 @@ export default function CustomerExcelTable({ rawData }: Props) {
           CBTL: 'DCE6F4',
           TC: 'F3E8D8',
         }
-        const grandFill = 'DDEFE7'
+        const grandFill = 'BAE6FD'
 
         const makeStyle = (argb: string, bold: boolean) => ({
           fill: { type: 'pattern', pattern: 'solid', fgColor: { argb } } as const,

@@ -17,14 +17,14 @@ const BRAND_TOTAL_FILL: Record<BrandKey, string> = {
   TC: '#F3E8D8',
 }
 
-/** 全品牌总计底色，和 Nandos 保持一致 #fff7ed */
-const GRAND_FILL = '#fff7ed'
+/** All Outlets Total 底色改成 #bae6fd */
+const GRAND_FILL = '#bae6fd'
 
 /**
  * Overall Amount View：按 品牌 × 地区(KL / Outstation / Total) 汇总每月金额
  * - data        : 普通明细行（KL / OUTSTATION）
  * - brand-total : 品牌合计行（按品牌分色）
- * - grand       : 全部品牌总计行（#fff7ed）
+ * - grand       : 全部品牌总计行（#bae6fd）
  */
 export default function CustomerExcelTableOverall({ rows }: Props) {
   const rowFill = (row: OverallRow): string | undefined => {
