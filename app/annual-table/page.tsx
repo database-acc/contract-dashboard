@@ -1,9 +1,13 @@
 import { Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import AnnualTableDataLoader from './AnnualTableDataLoader'
+
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
+  ssr: false
+})
 
 type SearchParams = Promise<{ year?: string }>
 
-// ❗不要在这里 await searchParams，直接把promise往下传
 export default async function Page({
   searchParams,
 }: {
@@ -19,8 +23,7 @@ export default async function Page({
           ← Back to Dashboard
         </a>
       </div>
-      {/* searchParams 在子组件内部再await，子组件放在Suspense里面 */}
-      <Suspense fallback={<div className="p-4">Loading Annual Schedule...</div>}>
+      <Suspense fallback={<FullScreenLoading />}>
         <AnnualTableDataLoader searchParams={searchParams} />
       </Suspense>
     </main>

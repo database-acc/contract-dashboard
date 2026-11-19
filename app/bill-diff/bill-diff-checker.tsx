@@ -48,14 +48,38 @@ type DiffItem = {
   diffMap: Record<string, { oldVal: string; newVal: string }>
 }
 
-// 内置CSV解析
+// ✅ 修复标准CSV解析（支持 "" 转义引号）
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.split(/\r?\n/).filter(line => line.trim() !== '')
-  if (lines.length === 0) return []
-  const headers = splitCsvLine(lines[0])
+  const lines: string[] = []
+  let currentLine = ''
+  let insideQuote = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    const next = text[i+1]
+    if (c === '"') {
+      if (insideQuote && next === '"') {
+        currentLine += '"'
+        i++
+      } else {
+        insideQuote = !insideQuote
+      }
+    } else if ((c === '\n' || c === '\r') && !insideQuote) {
+      if (c === '\r' && next === '\n') i++
+      lines.push(currentLine)
+      currentLine = ''
+    } else {
+      currentLine += c
+    }
+  }
+  if (currentLine) lines.push(currentLine)
+
+  const validLines = lines.filter(line => line.trim() !== '')
+  if (validLines.length === 0) return []
+
+  const headers = splitCsvLine(validLines[0])
   const result: Record<string, string>[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const values = splitCsvLine(lines[i])
+  for (let i = 1; i < validLines.length; i++) {
+    const values = splitCsvLine(validLines[i])
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
       row[h.trim()] = values[idx] ?? ''
@@ -89,37 +113,39 @@ export default function BillDiffChecker() {
   const [yearFilter, setYearFilter] = useState('All Year')
   const [showUnchanged, setShowUnchanged] = useState(true)
   const [detailItem, setDetailItem] = useState<DiffItem | null>(null)
+  const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 👉 分页拉取全部数据（解决1000行限制）
   const loadDB = async () => {
+    setLoading(true)
     const PAGE_SIZE = 1000
     let allData: BillRow[] = []
     let from = 0
     let fetchMore = true
 
-    while (fetchMore) {
-      const { data, error } = await supabase
-        .from('maintenance_bills')
-        .select('area_code,month,doc_no,bill_date,company_name,description,agent,area,project,total,branch_name,schedule_month_ref,service_type')
-        .order('id', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1)
+    try {
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from('maintenance_bills')
+          .select('area_code,month,doc_no,bill_date,company_name,description,agent,area,project,total,branch_name,schedule_month_ref,service_type')
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1)
 
-      if (error) {
-        alert(error.message)
-        return
+        if (error) throw error
+        if (!data || data.length === 0) {
+          fetchMore = false
+        } else {
+          allData = [...allData, ...(data as BillRow[])]
+          from += PAGE_SIZE
+        }
       }
-      if (!data || data.length === 0) {
-        fetchMore = false
-      } else {
-        allData = [...allData, ...(data as BillRow[])]
-        from += PAGE_SIZE
-      }
+      setDbBills(allData)
+      console.log('✅ DB Bills loaded ALL, total:', allData.length)
+    } catch (err: any) {
+      alert('Load DB error: ' + err.message)
+    } finally {
+      setLoading(false)
     }
-
-    setDbBills(allData)
-    console.log('✅ DB Bills loaded ALL, total:', allData.length)
-    console.log('DB month sample:', allData.slice(0,15).map(x => x.month))
   }
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,25 +153,33 @@ export default function BillDiffChecker() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = evt => {
-      const text = evt.target?.result as string
-      const records = parseCSV(text)
-      const parsed: BillRow[] = records.map(r => ({
-        area_code: r.area_code ?? null,
-        month: r.month ?? null,
-        doc_no: r.doc_no ?? null,
-        bill_date: r.bill_date ?? null,
-        company_name: r.company_name ?? null,
-        description: r.description ?? null,
-        agent: r.agent ?? null,
-        area: r.area ?? null,
-        project: r.project ?? null,
-        total: r.total ?? null,
-        branch_name: r.branch_name ?? null,
-        schedule_month_ref: r.schedule_month_ref ?? null,
-        service_type: r.service_type ?? null
-      }))
-      setCsvBills(parsed)
-      console.log('CSV loaded total:', parsed.length)
+      try {
+        const text = evt.target?.result as string
+        const records = parseCSV(text)
+        if (records.length === 0) {
+          alert('CSV 里面没有数据，请检查文件！')
+          return
+        }
+        const parsed: BillRow[] = records.map(r => ({
+          area_code: r.area_code ?? null,
+          month: r.month ?? null,
+          doc_no: r.doc_no ?? null,
+          bill_date: r.bill_date ?? null,
+          company_name: r.company_name ?? null,
+          description: r.description ?? null,
+          agent: r.agent ?? null,
+          area: r.area ?? null,
+          project: r.project ?? null,
+          total: r.total ?? null,
+          branch_name: r.branch_name ?? null,
+          schedule_month_ref: r.schedule_month_ref ?? null,
+          service_type: r.service_type ?? null
+        }))
+        setCsvBills(parsed)
+        console.log('CSV loaded total:', parsed.length)
+      } catch (err) {
+        alert('CSV解析失败，文件格式不对！')
+      }
     }
     reader.readAsText(file)
   }
@@ -227,7 +261,8 @@ export default function BillDiffChecker() {
         lines.push([item.doc_no, item.status, '-', `"${item.old?.doc_no ?? ''}"`, `"${item.new?.doc_no ?? ''}"`].join(','))
       }
     })
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    // ✅ Windows Excel兼容 \r\n
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -253,7 +288,9 @@ export default function BillDiffChecker() {
     <div style={{ padding: 16, fontFamily: 'sans-serif' }}>
       <h2>Maintenance Bills Diff Checker</h2>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-        <button onClick={loadDB} style={{ padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6 }}>Load DB Current Bills</button>
+        <button onClick={loadDB} disabled={loading} style={{ padding: '8px 14px', background: loading ? '#94a3b8' : '#2563eb', color: '#fff', border: 'none', borderRadius: 6 }}>
+          {loading ? 'Loading...' : 'Load DB Current Bills'}
+        </button>
         <button onClick={() => fileInputRef.current?.click()} style={{ padding: '8px 14px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6 }}>Upload New CSV</button>
         <input ref={fileInputRef} type="file" accept=".csv" onChange={handleUpload} hidden />
         <button onClick={exportDiffCSV} style={{ padding: '8px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 6 }}>Export Diff CSV</button>
@@ -297,7 +334,7 @@ export default function BillDiffChecker() {
 
       {detailItem && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'grid', placeItems: 'center', zIndex: 999 }} onClick={() => setDetailItem(null)}>
-          <div style={{ background: '#fff', padding: 20, width: 700, maxHeight: '80vh', overflow: 'auto', borderRadius: 8 }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: '#fff', padding: 20, width: 'min(700px, 90vw)', maxHeight: '80vh', overflow: 'auto', borderRadius: 8 }} onClick={e => e.stopPropagation()}>
             <h3>Doc No: {detailItem.doc_no}</h3>
             <p>Status: {statusLabel[detailItem.status]}</p>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

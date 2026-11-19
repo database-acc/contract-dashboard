@@ -16,20 +16,18 @@ export default async function BillDiffPage() {
     }
   )
 
-  // 鉴权
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single()
 
-  // 仅 account 角色可访问，其他角色跳回dashboard
-  if (profile?.role !== 'account') {
+  if (error || !profile || profile.role !== 'account') {
     redirect('/dashboard')
   }
 

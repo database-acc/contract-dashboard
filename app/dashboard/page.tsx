@@ -3,7 +3,13 @@ import { connection } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import DashboardStateWrapper from './DashboardStateWrapper'
+
+// 动态导入 Client 组件 Loading
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
+  ssr: false
+})
 
 // contract_branch 表类型
 type ContractBranchRow = {
@@ -196,7 +202,7 @@ async function DashboardContent() {
 export default function Dashboard() {
   return (
     <main className="p-3 md:p-4 lg:p-5 max-w-full">
-      <Suspense fallback={<p className="text-center">Loading...</p>}>
+      <Suspense fallback={<FullScreenLoading />}>
         <DashboardContent />
       </Suspense>
     </main>

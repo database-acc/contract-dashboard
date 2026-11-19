@@ -2,7 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Suspense } from 'react'
 import { connection } from 'next/server'
+import dynamic from 'next/dynamic'
 import CustomerExcelTable from './CustomerExcelTable'
+
+// 动态导入客户端美化组件，关闭SSR
+const FullScreenLoading = dynamic(() => import('@/app/components/FullScreenLoading'), {
+  ssr: false
+})
+const UnauthorizedPage = dynamic(() => import('@/app/components/UnauthorizedPage'), {
+  ssr: false
+})
 
 type ContractBranchRow = {
   id: bigint
@@ -74,7 +83,7 @@ async function DataLoader() {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    return <div>Unauthorized, please login</div>
+    return <UnauthorizedPage />
   }
 
   const { data, error } = await supabase.from('contract_branch').select('*')
@@ -86,7 +95,7 @@ async function DataLoader() {
 export default async function CustomerExcelPage() {
   return (
     <div className="p-6">
-      <Suspense fallback={<p>Loading data...</p>}>
+      <Suspense fallback={<FullScreenLoading />}>
         <DataLoader />
       </Suspense>
     </div>
