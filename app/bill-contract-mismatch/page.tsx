@@ -62,7 +62,7 @@ type AnalyzedBill = MaintenanceBillRow & {
 }
 
 /* ================================================================== */
-/* Helpers — 与 DashboardStateWrapper 逐字一致                         */
+/* Helpers — 与 DashboardStateWrapper 逐字一致                        */
 /* ================================================================== */
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -104,7 +104,7 @@ function parseBillMonth(monthStr: string | null): ParseResult {
   const results: ParsedMonthItem[] = []
 
   for (const s of parts) {
-    // dd/mm/yyyy 或 d/m/yyyy（Dashboard 原版只吃两位，这里放宽到 1-2 位）
+    // dd/mm/yyyy 或 d/m/yyyy（Dashboard 原版只吃两位，这里放宽到 1‑2 位）
     const dateSlashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
     if (dateSlashMatch) {
       const m = parseInt(dateSlashMatch[2], 10)
@@ -112,7 +112,7 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       if (m >= 1 && m <= 12 && y >= 2020) results.push({ year: y, month: m })
       continue
     }
-    // 2026-01
+    // 2026‑01
     const isoMatch = s.match(/^(\d{4})-(\d{1,2})$/)
     if (isoMatch) {
       const y = parseInt(isoMatch[1], 10)
@@ -120,8 +120,8 @@ function parseBillMonth(monthStr: string | null): ParseResult {
       if (m >= 1 && m <= 12 && y >= 2020) results.push({ year: y, month: m })
       continue
     }
-    // Jan-26（注意：绝对不能用 new Date('May-26')，会变 1926）
-    const abbrMatch = s.match(/^([A-Za-z]{3})-(\d{2})$/)
+    // Jan‑26（注意：绝对不能用 new Date('May‑26')，会变 1926）
+    const abbrMatch = s.match(/^([A‑Za‑z]{3})-(\d{2})$/)
     if (abbrMatch) {
       const abbr = abbrMatch[1].charAt(0).toUpperCase() + abbrMatch[1].slice(1).toLowerCase()
       const m = monthAbbrMap[abbr]
@@ -174,37 +174,62 @@ function isWorkInMonth(
 const YEAR_OPTIONS = [2024, 2025, 2026, 2027, 2028]
 const PROJECT_OPTIONS = [
   { value: 'all', label: 'All Projects' },
-  { value: 'NDO-CONTRACT', label: 'NDO-CONTRACT' },
-  { value: 'CBTL-CONTRACT', label: 'CBTL-CONTRACT' },
-  { value: 'TCA-CONTRACT', label: 'TCA-CONTRACT' },
-  { value: 'ZOK-CONTRACT', label: 'ZOK-CONTRACT' },
+  { value: 'NDO‑CONTRACT', label: 'NDO‑CONTRACT' },
+  { value: 'CBTL‑CONTRACT', label: 'CBTL‑CONTRACT' },
+  { value: 'TCA‑CONTRACT', label: 'TCA‑CONTRACT' },
+  { value: 'ZOK‑CONTRACT', label: 'ZOK‑CONTRACT' },
 ]
 
 const REASON_META: Record<ReasonCode, { label: string; cls: string }> = {
   MATCHED: {
     label: 'Matched',
-    cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    cls: 'bg‑emerald‑50 text‑emerald‑700 ring‑emerald‑200',
   },
   NO_PLAN_FOR_BRANCH: {
     label: 'No contract row for this branch',
-    cls: 'bg-rose-50 text-rose-700 ring-rose-200',
+    cls: 'bg‑rose‑50 text‑rose‑700 ring‑rose‑200',
   },
   SERVICE_NOT_IN_CONTRACT: {
     label: 'This service is not in the contract',
-    cls: 'bg-rose-50 text-rose-700 ring-rose-200',
+    cls: 'bg‑rose‑50 text‑rose‑700 ring‑rose‑200',
   },
   MONTH_NOT_SCHEDULED: {
     label: 'Contract does not schedule this month',
-    cls: 'bg-amber-50 text-amber-700 ring-amber-200',
+    cls: 'bg‑amber‑50 text‑amber‑700 ring‑amber‑200',
   },
   OTHER: {
     label: 'Not matched',
-    cls: 'bg-slate-100 text-slate-700 ring-slate-200',
+    cls: 'bg‑slate‑100 text‑slate‑700 ring‑slate‑200',
   },
 }
 
 export default function BillContractMismatchPage() {
   const router = useRouter()
+  // -------- 新增：角色鉴权状态 --------
+  const [authChecking, setAuthChecking] = useState(true)
+
+  useEffect(() => {
+    const checkPermission = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.replace('/login')
+        return
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      // 仅允许 account，其他角色跳回 dashboard
+      if (profile?.role !== 'account') {
+        router.replace('/dashboard')
+        return
+      }
+      setAuthChecking(false)
+    }
+    checkPermission()
+  }, [router])
 
   const [planYear, setPlanYear] = useState<number>(2026)
   const [selectedProject, setSelectedProject] = useState<string>('all')
@@ -273,10 +298,12 @@ export default function BillContractMismatchPage() {
   }, [])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (!authChecking) {
+      loadData()
+    }
+  }, [loadData, authChecking])
 
-  /* ---------------- Plan index：branch | service | yyyy-MM ---------------- */
+  /* ---------------- Plan index：branch | service | yyyy‑MM ---------------- */
   const planIndex = useMemo(() => {
     const map = new Map<number, PlanInfo>()
     for (let y = 2024; y <= 2028; y++) {
@@ -501,32 +528,36 @@ export default function BillContractMismatchPage() {
   /* ================================================================== */
   /* Render                                                             */
   /* ================================================================== */
+  // 鉴权加载中
+  if (authChecking) {
+    return <div className="min‑h‑screen flex items‑center justify‑center text‑slate‑500">Checking access…</div>
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
+    <div className="min‑h‑screen bg‑slate‑50 p‑4 md:p‑8">
+      <div className="mx‑auto max‑w‑[1500px] space‑y‑6">
 
         {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-              <svg className="h-5 w-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <div className="flex flex‑wrap items‑start justify‑between gap‑4">
+          <div className="flex items‑center gap‑3">
+            <div className="flex h‑10 w‑10 items‑center justify‑center rounded‑xl bg‑white shadow‑sm ring‑1 ring‑slate‑200">
+              <svg className="h‑5 w‑5 text‑rose‑600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m‑6 4h6m2 5H7a2 2 0 01‑2‑2V5a2 2 0 012‑2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01‑2 2z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">Contract Bills Not Covered by Contract Plan</h1>
-              <p className="mt-0.5 text-sm text-slate-500">
-                Bill → plan cross-check, same key rule as DashboardStateWrapper: branch | service | yyyy-MM
+              <h1 className="text‑xl font‑semibold text‑slate‑900">Contract Bills Not Covered by Contract Plan</h1>
+              <p className="mt‑0.5 text‑sm text‑slate‑500">
+                Bill → plan cross‑check, same key rule as DashboardStateWrapper: branch | service | yyyy‑MM
               </p>
             </div>
           </div>
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
+            className="inline‑flex items‑center gap‑2 rounded‑lg bg‑white px‑4 py‑2 text‑sm font‑medium text‑slate‑700 shadow‑sm ring‑1 ring‑slate‑200 transition hover:bg‑slate‑50"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            <svg className="h‑4 w‑4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l‑7‑7m0 0l7‑7m‑7 7h18" />
             </svg>
             Back
           </button>
@@ -534,52 +565,52 @@ export default function BillContractMismatchPage() {
 
         {/* Error banner */}
         {loadError && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className="rounded‑xl border border‑rose‑200 bg‑rose‑50 p‑4 text‑sm text‑rose‑700">
             <strong>Load failed:</strong> {loadError}
           </div>
         )}
 
         {/* 计划年份覆盖不足警告 */}
         {currentPlan.contractRows === 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="rounded‑xl border border‑amber‑200 bg‑amber‑50 p‑4 text‑sm text‑amber‑800">
             <strong>No active contract row covers {planYear}.</strong>{' '}
             Every bill in {planYear} will be listed as unmatched. Check the coverage table below and record the {planYear} contracts first.
           </div>
         )}
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Raw Bills</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{rawBillCount || bills.length}</div>
-            <div className="mt-1 text-xs text-slate-400">rows actually loaded: {bills.length}</div>
+        <div className="grid grid‑cols‑2 gap‑4 md:grid‑cols‑4">
+          <div className="rounded‑xl bg‑white p‑4 shadow‑sm ring‑1 ring‑slate‑200">
+            <div className="text‑xs font‑medium uppercase tracking‑wide text‑slate‑500">Raw Bills</div>
+            <div className="mt‑1 text‑2xl font‑semibold text‑slate‑900">{rawBillCount || bills.length}</div>
+            <div className="mt‑1 text‑xs text‑slate‑400">rows actually loaded: {bills.length}</div>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Contract Bills (all years)</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">{analysis.contractBillsAllYears}</div>
-            <div className="mt-1 text-xs text-slate-400">project contains &quot;CONTRACT&quot;</div>
+          <div className="rounded‑xl bg‑white p‑4 shadow‑sm ring‑1 ring‑slate‑200">
+            <div className="text‑xs font‑medium uppercase tracking‑wide text‑slate‑500">Contract Bills (all years)</div>
+            <div className="mt‑1 text‑2xl font‑semibold text‑slate‑900">{analysis.contractBillsAllYears}</div>
+            <div className="mt‑1 text‑xs text‑slate‑400">project contains &quot;CONTRACT&quot;</div>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-emerald-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-emerald-700">Matched ({planYear})</div>
-            <div className="mt-1 text-2xl font-semibold text-emerald-600">{analysis.matchedCount}</div>
-            <div className="mt-1 text-xs text-emerald-600">of {analysis.validCount} bills in {planYear}</div>
+          <div className="rounded‑xl bg‑white p‑4 shadow‑sm ring‑1 ring‑emerald‑200">
+            <div className="text‑xs font‑medium uppercase tracking‑wide text‑emerald‑700">Matched ({planYear})</div>
+            <div className="mt‑1 text‑2xl font‑semibold text‑emerald‑600">{analysis.matchedCount}</div>
+            <div className="mt‑1 text‑xs text‑emerald‑600">of {analysis.validCount} bills in {planYear}</div>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-rose-200">
-            <div className="text-xs font-medium uppercase tracking-wide text-rose-700">Not Matched ({planYear})</div>
-            <div className="mt-1 text-2xl font-semibold text-rose-600">{analysis.unmatchedCount}</div>
-            <div className="mt-1 text-xs text-rose-500">bills with no plan slot</div>
+          <div className="rounded‑xl bg‑white p‑4 shadow‑sm ring‑1 ring‑rose‑200">
+            <div className="text‑xs font‑medium uppercase tracking‑wide text‑rose‑700">Not Matched ({planYear})</div>
+            <div className="mt‑1 text‑2xl font‑semibold text‑rose‑600">{analysis.unmatchedCount}</div>
+            <div className="mt‑1 text‑xs text‑rose‑500">bills with no plan slot</div>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="space-y-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-700">Plan Year:</label>
+        <div className="space‑y‑3 rounded‑xl bg‑white p‑4 shadow‑sm ring‑1 ring‑slate‑200">
+          <div className="flex flex‑wrap items‑center gap‑4">
+            <div className="flex items‑center gap‑2">
+              <label className="text‑sm font‑medium text‑slate‑700">Plan Year:</label>
               <select
                 value={planYear}
                 onChange={e => setPlanYear(Number(e.target.value))}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                className="rounded‑lg border border‑slate‑300 bg‑white px‑3 py‑1.5 text‑sm font‑medium text‑slate‑700 shadow‑sm focus:border‑rose‑500 focus:outline‑none focus:ring‑2 focus:ring‑rose‑100"
               >
                 {YEAR_OPTIONS.map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -588,12 +619,12 @@ export default function BillContractMismatchPage() {
             </div>
 
             {/* 新增 Project Selector */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-700">Project:</label>
+            <div className="flex items‑center gap‑2">
+              <label className="text‑sm font‑medium text‑slate‑700">Project:</label>
               <select
                 value={selectedProject}
                 onChange={e => setSelectedProject(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                className="rounded‑lg border border‑slate‑300 bg‑white px‑3 py‑1.5 text‑sm font‑medium text‑slate‑700 shadow‑sm focus:border‑rose‑500 focus:outline‑none focus:ring‑2 focus:ring‑rose‑100"
               >
                 {PROJECT_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -601,13 +632,13 @@ export default function BillContractMismatchPage() {
               </select>
             </div>
 
-            <div className="flex overflow-hidden rounded-lg ring-1 ring-slate-200">
+            <div className="flex overflow‑hidden rounded‑lg ring‑1 ring‑slate‑200">
               {(['unmatched', 'matched', 'all'] as const).map(m => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`px-3 py-1.5 text-sm font-medium capitalize transition ${
-                    mode === m ? 'bg-rose-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                  className={`px‑3 py‑1.5 text‑sm font‑medium capitalize transition ${
+                    mode === m ? 'bg‑rose‑600 text‑white' : 'bg‑white text‑slate‑600 hover:bg‑slate‑50'
                   }`}
                 >
                   {m}
@@ -615,12 +646,12 @@ export default function BillContractMismatchPage() {
               ))}
             </div>
 
-            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+            <label className="inline‑flex items‑center gap‑2 text‑sm text‑slate‑600">
               <input
                 type="checkbox"
                 checked={includeWarranty}
                 onChange={e => setIncludeWarranty(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
+                className="h‑4 w‑4 rounded border border‑slate‑300 text‑rose‑600 focus:ring‑rose‑200"
               />
               Include WARRANTY bills
             </label>
@@ -629,44 +660,44 @@ export default function BillContractMismatchPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search branch / project / doc no / id"
-              className="min-w-[220px] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+              className="min‑w‑[220px] flex‑1 rounded‑lg border border‑slate‑300 px‑3 py‑1.5 text‑sm text‑slate‑700 shadow‑sm focus:border‑rose‑500 focus:outline‑none focus:ring‑2 focus:ring‑rose‑100"
             />
 
             <button
               onClick={loadData}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+              className="inline‑flex items‑center gap‑2 rounded‑lg bg‑rose‑600 px‑4 py‑2 text‑sm font‑medium text‑white shadow‑sm transition hover:bg‑rose‑700 disabled:opacity‑60"
             >
               {loading ? 'Loading...' : 'Reload Data'}
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="font-medium text-slate-700">Plan coverage:</span>
+          <div className="flex flex‑wrap items‑center gap‑2 text‑xs text‑slate‑500">
+            <span className="font‑medium text‑slate‑700">Plan coverage:</span>
             {yearCoverage.map(c => (
               <span
                 key={c.year}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ring-1 ring-inset ${
+                className={`inline‑flex items‑center gap‑1 rounded‑md px‑2 py‑1 ring‑1 ring‑inset ${
                   c.year === planYear
-                    ? 'bg-rose-50 text-rose-700 ring-rose-200'
-                    : 'bg-slate-50 text-slate-600 ring-slate-200'
+                    ? 'bg‑rose‑50 text‑rose‑700 ring‑rose‑200'
+                    : 'bg‑slate‑50 text‑slate‑600 ring‑slate‑200'
                 }`}
               >
                 {c.year}: {c.rows} contracts / {c.keys} keys
               </span>
             ))}
-            <span className="text-slate-400">·</span>
+            <span className="text‑slate‑400">·</span>
             <span>{contracts.length} contract rows loaded</span>
           </div>
 
           {/* 未匹配原因分布 */}
           {Object.keys(reasonSummary).length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-xs">
-              <span className="font-medium text-slate-700">Why not matched:</span>
+            <div className="flex flex‑wrap items‑center gap‑2 border‑t border‑slate‑100 pt‑3 text‑xs">
+              <span className="font‑medium text‑slate‑700">Why not matched:</span>
               {(Object.keys(reasonSummary) as ReasonCode[]).map(k => (
                 <span
                   key={k}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ring-1 ring-inset ${REASON_META[k].cls}`}
+                  className={`inline‑flex items‑center gap‑1 rounded‑md px‑2 py‑1 ring‑1 ring‑inset ${REASON_META[k].cls}`}
                 >
                   {REASON_META[k].label}: {reasonSummary[k]}
                 </span>
@@ -676,14 +707,14 @@ export default function BillContractMismatchPage() {
 
           {/* Project 分布 */}
           {Object.keys(byProject).length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-medium text-slate-700">By project:</span>
+            <div className="flex flex‑wrap items‑center gap‑2 text‑xs">
+              <span className="font‑medium text‑slate‑700">By project:</span>
               {Object.entries(byProject)
                 .sort((a, b) => b[1] - a[1])
                 .map(([p, n]) => (
                   <span
                     key={p}
-                    className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-1 text-sky-700 ring-1 ring-inset ring-sky-200"
+                    className="inline‑flex items‑center gap‑1 rounded‑md bg‑sky‑50 px‑2 py‑1 text‑sky‑700 ring‑1 ring‑inset ring‑sky‑200"
                   >
                     {p}: {n}
                   </span>
@@ -693,23 +724,23 @@ export default function BillContractMismatchPage() {
 
           <button
             onClick={() => setShowDebug(v => !v)}
-            className="text-xs font-medium text-slate-500 underline decoration-dotted hover:text-slate-700"
+            className="text‑xs font‑medium text‑slate‑500 underline decoration‑dotted hover:text‑slate‑700"
           >
             {showDebug ? 'Hide' : 'Show'} load diagnostics
           </button>
 
           {showDebug && (
-            <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 ring-1 ring-slate-200">
-              <div className="grid gap-1 md:grid-cols-2">
+            <div className="rounded‑lg bg‑slate‑50 p‑3 text‑xs text‑slate‑600 ring‑1 ring‑slate‑200">
+              <div className="grid gap‑1 md:grid‑cols‑2">
                 <span>bills loaded: <strong>{bills.length}</strong> (db count: {rawBillCount || 'n/a'})</span>
                 <span>contract rows loaded: <strong>{contracts.length}</strong></span>
                 <span>active plan rows for {planYear}: <strong>{currentPlan.contractRows}</strong></span>
                 <span>plan keys for {planYear}: <strong>{currentPlan.keys.size}</strong></span>
               </div>
               {Object.keys(analysis.skipped).length > 0 && (
-                <div className="mt-2">
-                  <div className="font-medium text-slate-700">Skipped bills:</div>
-                  <ul className="mt-1 grid gap-0.5 md:grid-cols-2">
+                <div className="mt‑2">
+                  <div className="font‑medium text‑slate‑700">Skipped bills:</div>
+                  <ul className="mt‑1 grid gap‑0.5 md:grid‑cols‑2">
                     {Object.entries(analysis.skipped).map(([k, v]) => (
                       <li key={k}>· {k}: <strong>{v}</strong></li>
                     ))}
@@ -721,79 +752,79 @@ export default function BillContractMismatchPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+        <div className="overflow‑hidden rounded‑xl bg‑white shadow‑sm ring‑1 ring‑slate‑200">
+          <div className="overflow‑x‑auto">
+            <table className="min‑w‑full text‑sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  <th className="whitespace-nowrap px-4 py-3">Bill Id</th>
-                  <th className="whitespace-nowrap px-4 py-3">Branch Name</th>
-                  <th className="whitespace-nowrap px-4 py-3">Type</th>
-                  <th className="whitespace-nowrap px-4 py-3">Service</th>
-                  <th className="whitespace-nowrap px-4 py-3">Ref Month Used</th>
-                  <th className="whitespace-nowrap px-4 py-3">Bill Month</th>
-                  <th className="whitespace-nowrap px-4 py-3">Doc No</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-right">Amount</th>
-                  <th className="whitespace-nowrap px-4 py-3">Plan Keys</th>
-                  <th className="whitespace-nowrap px-4 py-3">Why Not Matched</th>
+                <tr className="border‑b border‑slate‑200 bg‑slate‑50 text‑left text‑xs font‑semibold uppercase tracking‑wide text‑slate‑600">
+                  <th className="whitespace‑nowrap px‑4 py‑3">Bill Id</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Branch Name</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Type</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Service</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Ref Month Used</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Bill Month</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Doc No</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3 text‑right">Amount</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Plan Keys</th>
+                  <th className="whitespace‑nowrap px‑4 py‑3">Why Not Matched</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide‑y divide‑slate‑100">
                 {visibleRows.map((row, idx) => (
                   <tr
                     key={String(row.id)}
-                    className={`transition hover:bg-slate-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
+                    className={`transition hover:bg‑slate‑50 ${idx % 2 === 0 ? 'bg‑white' : 'bg‑slate‑50/40'}`}
                   >
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-700">{String(row.id)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-800">{row.branch_name ?? '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="whitespace‑nowrap px‑4 py‑3 font‑mono text‑xs text‑slate‑700">{String(row.id)}</td>
+                    <td className="whitespace‑nowrap px‑4 py‑3 font‑medium text‑slate‑800">{row.branch_name ?? '-'}</td>
+                    <td className="whitespace‑nowrap px‑4 py‑3">
                       <span
-                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${
+                        className={`inline‑flex items‑center rounded‑md px‑2 py‑0.5 text‑xs font‑semibold ring‑1 ring‑inset ${
                           row.projectType === 'WARRANTY'
-                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                            : 'bg-sky-50 text-sky-700 ring-sky-200'
+                            ? 'bg‑amber‑50 text‑amber‑700 ring‑amber‑200'
+                            : 'bg‑sky‑50 text‑sky‑700 ring‑sky‑200'
                         }`}
                       >
                         {row.projectType}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="whitespace‑nowrap px‑4 py‑3">
+                      <div className="flex flex‑wrap gap‑1">
                         {row.resolvedJobs.map(j => (
                           <span
                             key={j}
-                            className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-200"
+                            className="inline‑flex items‑center rounded‑md bg‑indigo‑50 px‑2 py‑0.5 text‑xs font‑semibold text‑indigo‑700 ring‑1 ring‑inset ring‑indigo‑200"
                           >
                             {j}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">
+                    <td className="whitespace‑nowrap px‑4 py‑3 font‑mono text‑xs text‑slate‑600">
                       {row.refMonthRaw || '-'}
                       {row.schedule_month_ref?.trim() ? (
-                        <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">ref</span>
+                        <span className="ml‑1 rounded bg‑slate‑100 px‑1 text‑[10px] text‑slate‑500">ref</span>
                       ) : (
-                        <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">month</span>
+                        <span className="ml‑1 rounded bg‑slate‑100 px‑1 text‑[10px] text‑slate‑500">month</span>
                       )}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500">{row.month ?? '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500">{row.doc_no ?? '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-sm text-slate-700">
+                    <td className="whitespace‑nowrap px‑4 py‑3 font‑mono text‑xs text‑slate‑500">{row.month ?? '-'}</td>
+                    <td className="whitespace‑nowrap px‑4 py‑3 font‑mono text‑xs text‑slate‑500">{row.doc_no ?? '-'}</td>
+                    <td className="whitespace‑nowrap px‑4 py‑3 text‑right font‑mono text‑sm text‑slate‑700">
                       {row.total != null ? Number(row.total).toLocaleString() : '-'}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
+                    <td className="px‑4 py‑3">
+                      <div className="flex flex‑wrap gap‑1.5">
                         {row.keys.map(kk => (
                           <span
                             key={kk.key}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-xs ring-1 ring-inset ${
+                            className={`inline‑flex items‑center gap‑1 rounded‑md px‑2 py‑1 font‑mono text‑xs ring‑1 ring‑inset ${
                               kk.matched
-                                ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                                : 'bg-rose-50 text-rose-700 ring-rose-200'
+                                ? 'bg‑emerald‑50 text‑emerald‑700 ring‑emerald‑200'
+                                : 'bg‑rose‑50 text‑rose‑700 ring‑rose‑200'
                             }`}
                           >
-                            <span className={kk.matched ? 'text-emerald-500' : 'text-rose-500'}>
+                            <span className={kk.matched ? 'text‑emerald‑500' : 'text‑rose‑500'}>
                               {kk.matched ? '✓' : '✗'}
                             </span>
                             {kk.key}
@@ -801,14 +832,14 @@ export default function BillContractMismatchPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px‑4 py‑3">
                       <span
-                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${REASON_META[row.reason].cls}`}
+                        className={`inline‑flex items‑center rounded‑md px‑2 py‑0.5 text‑xs font‑semibold ring‑1 ring‑inset ${REASON_META[row.reason].cls}`}
                       >
                         {REASON_META[row.reason].label}
                       </span>
                       {row.reason !== 'MATCHED' && row.hintMonths.length > 0 && (
-                        <div className="mt-1 text-[11px] text-slate-500">
+                        <div className="mt‑1 text‑[11px] text‑slate‑500">
                           contract months: {row.hintMonths.join(', ')}
                         </div>
                       )}
@@ -818,7 +849,7 @@ export default function BillContractMismatchPage() {
 
                 {visibleRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-16 text-center text-sm text-slate-500">
+                    <td colSpan={10} className="px‑4 py‑16 text‑center text‑sm text‑slate‑500">
                       {loading
                         ? 'Loading...'
                         : `No ${mode === 'unmatched' ? 'unmatched ' : ''}bills for Plan Year ${planYear}.`}
@@ -831,12 +862,12 @@ export default function BillContractMismatchPage() {
         </div>
 
         {/* Footer note */}
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-700">How this page decides &quot;not matched&quot;</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            <li>Plan side: <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">contract_branch</code> + <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">isWorkInMonth()</code>, service parsed from <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">description</code></li>
-            <li>Bill side: <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">schedule_month_ref</code> when non-empty, otherwise <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">month</code> (empty string must fall through, not <code>??</code>)</li>
-            <li>Key format: <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">branch | service | yyyy-MM</code> — one mismatch means the bill never shows Done in Dashboard</li>
+        <div className="rounded‑xl border border‑dashed border‑slate‑300 bg‑white/60 p‑4 text‑sm text‑slate‑600">
+          <p className="font‑medium text‑slate‑700">How this page decides &quot;not matched&quot;</p>
+          <ul className="mt‑1 list‑disc space‑y‑0.5 pl‑5">
+            <li>Plan side: <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">contract_branch</code> + <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">isWorkInMonth()</code>, service parsed from <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">description</code></li>
+            <li>Bill side: <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">schedule_month_ref</code> when non‑empty, otherwise <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">month</code> (empty string must fall through, not <code>??</code>)</li>
+            <li>Key format: <code className="rounded bg‑slate‑100 px‑1 py‑0.5 font‑mono text‑xs">branch | service | yyyy‑MM</code> — one mismatch means the bill never shows Done in Dashboard</li>
             <li>Only bills whose ref month falls inside the selected Plan Year are listed; other years are excluded</li>
             <li>WARRANTY bills need both <code>schedule_month_ref</code> and <code>service_type</code>, and are hidden unless the checkbox is on</li>
           </ul>

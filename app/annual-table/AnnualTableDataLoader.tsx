@@ -2,6 +2,7 @@
 import { connection } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import AnnualTableWrapper from './AnnualTableWrapper'
 
 type Props = {
@@ -26,6 +27,25 @@ export default async function AnnualTableDataLoader({ searchParams }: Props) {
       },
     }
   )
+
+  // ========== 角色权限校验：只允许 owner / account 访问 ==========
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = (profile?.role ?? 'staff') as string
+  // staff禁止访问，仅 owner、account放行
+  if (role !== 'owner' && role !== 'account') {
+    redirect('/dashboard')
+  }
+  // =============================================================
 
   const { data: billData, error: billErr } = await supabase
     .from('maintenance_bills')

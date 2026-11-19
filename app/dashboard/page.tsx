@@ -118,7 +118,9 @@ async function DashboardContent() {
   if (profileErr || !profile) {
     redirect('/login')
   }
-  const isBoss = profile.role === 'boss'
+
+  // 读取真实角色，限定为三枚举，异常兜底为 staff
+  const currentEditorRole = (profile.role ?? 'staff') as 'owner' | 'account' | 'staff'
 
   let contractBranchList: ContractBranchRow[] = []
   const { data, error } = await supabase
@@ -174,10 +176,9 @@ async function DashboardContent() {
       <DashboardStateWrapper
         rawBranchData={contractBranchList}
         rawBillsData={billsList}
-        isBoss={isBoss}
         updateBillServiceType={updateBillServiceType}
         currentEditorName={userName}
-        currentEditorRole={isBoss ? "boss" : "staff"}
+        currentEditorRole={currentEditorRole}
       >
         <form action={signOut}>
           <button

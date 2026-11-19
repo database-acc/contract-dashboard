@@ -55,14 +55,29 @@ type BillScheduleAssignRow = {
 type Props = {
   rawBranchData: ContractBranchRow[]
   rawBillsData: MaintenanceBillRow[]
-  isBoss: boolean
   updateBillServiceType: (billId: bigint, serviceType: string | null) => Promise<void>
   currentEditorName: string
-  currentEditorRole: 'boss' | 'staff'
+  currentEditorRole: 'owner' | 'account' | 'staff'
   children?: ReactNode
 }
 
 const jobPriority: Record<string, number> = { GWM: 1, KPM: 2, KPS: 3, GTC: 4 }
+
+// ✅ 权限映射表
+const accessMap: Record<'owner' | 'account' | 'staff', string[]> = {
+  owner: ['/dashboard', '/annual-table', '/customer-excel', '/staff-schedule'],
+  account: [
+    '/dashboard',
+    '/annual-table',
+    '/customer-excel',
+    '/staff-schedule',
+    '/data-checker',
+    '/bill-contract-mismatch',
+    '/bill-diff',
+  ],
+  staff: ['/dashboard', '/customer-excel', '/staff-schedule'],
+}
+const allowPage = (role: 'owner' | 'account' | 'staff', path: string) => accessMap[role].includes(path)
 
 // ✅ 拆分 & 分隔的多服务类型
 function splitServiceTypes(raw: string | null | undefined): string[] {
@@ -172,7 +187,6 @@ type BillInfo = {
 export default function DashboardStateWrapper({
   rawBranchData,
   rawBillsData,
-  isBoss,
   updateBillServiceType,
   currentEditorName,
   currentEditorRole,
@@ -528,58 +542,70 @@ export default function DashboardStateWrapper({
         <p className="text-base font-semibold text-gray-600 mb-4 uppercase tracking-wider px-4">
           Reports
         </p>
-        <a
-          href="/annual-table"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => setSideOpen(false)}
-          className="block bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colours text-center mx-4"
-        >
-          Annual Maintenance Schedule
-        </a>
-        <a
-          href="/customer-excel"
-          onClick={() => setSideOpen(false)}
-          className="block mt-1 bg-emerald-600 text-white px-3 py-2 rounded text-sm hover:bg-emerald-700 transition-colours text-center mx-4"
-        >
-          Customer Schedule Report
-        </a>
-        {isBoss && (
-          <>
-            <a
-              href="/data-checker"
-              onClick={() => setSideOpen(false)}
-              className="block mt-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colours text-center mx-4"
-            >
-              Data Validation Checker
-            </a>
-            <a
-              href="/bill-contract-mismatch"
-              onClick={() => setSideOpen(false)}
-              className="block mt-1 bg-orange-600 text-white px-3 py-2 rounded text-sm hover:bg-orange-700 transition-colours text-center mx-4"
-            >
-              Bill-Contract Mismatch Check
-            </a>
-            <a
-              href="/bill-diff"
-              onClick={() => setSideOpen(false)}
-              className="block mt-1 bg-amber-700 text-white px-3 py-2 rounded text-sm hover:bg-amber-800 transition-colours text-center mx-4"
-            >
-              Bill Diff Checker
-            </a>
-          </>
+
+        {allowPage(currentEditorRole, '/annual-table') && (
+          <a
+            href="/annual-table"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setSideOpen(false)}
+            className="block bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors text-center mx-4"
+          >
+            Annual Maintenance Schedule
+          </a>
         )}
 
-        {/* ✅ 新增员工手机日历页面链接，所有人可见，不需要isBoss权限 */}
-        <a
-          href="/staff-schedule"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => setSideOpen(false)}
-          className="block mt-1 bg-sky-500 text-white px-3 py-2 rounded text-sm hover:bg-sky-600 transition-colours text-center mx-4"
-        >
-          Staff Work Schedule
-        </a>
+        {allowPage(currentEditorRole, '/customer-excel') && (
+          <a
+            href="/customer-excel"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-emerald-600 text-white px-3 py-2 rounded text-sm hover:bg-emerald-700 transition-colors text-center mx-4"
+          >
+            Customer Schedule Report
+          </a>
+        )}
+
+        {allowPage(currentEditorRole, '/data-checker') && (
+          <a
+            href="/data-checker"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colors text-center mx-4"
+          >
+            Data Validation Checker
+          </a>
+        )}
+
+        {allowPage(currentEditorRole, '/bill-contract-mismatch') && (
+          <a
+            href="/bill-contract-mismatch"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-orange-600 text-white px-3 py-2 rounded text-sm hover:bg-orange-700 transition-colors text-center mx-4"
+          >
+            Bill-Contract Mismatch Check
+          </a>
+        )}
+
+        {allowPage(currentEditorRole, '/bill-diff') && (
+          <a
+            href="/bill-diff"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-amber-700 text-white px-3 py-2 rounded text-sm hover:bg-amber-800 transition-colors text-center mx-4"
+          >
+            Bill Diff Checker
+          </a>
+        )}
+
+        {allowPage(currentEditorRole, '/staff-schedule') && (
+          <a
+            href="/staff-schedule"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setSideOpen(false)}
+            className="block mt-1 bg-sky-500 text-white px-3 py-2 rounded text-sm hover:bg-sky-600 transition-colors text-center mx-4"
+          >
+            Staff Work Schedule
+          </a>
+        )}
 
         <button
           onClick={() => setSideOpen(false)}
@@ -599,7 +625,7 @@ export default function DashboardStateWrapper({
       <div className="flex flex-wrap items-center gap-1 mb-4 p-2 bg-white border border-gray-200 rounded-md shadow-sm">
         <button
           onClick={() => setSideOpen(!sideOpen)}
-          className="p-1 rounded hover:bg-gray-100 transition-colours text-slate-700 shrink-0"
+          className="p-1 rounded hover:bg-gray-100 transition-colors text-slate-700 shrink-0"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -613,7 +639,7 @@ export default function DashboardStateWrapper({
           <button
             type="button"
             onClick={() => setCustomerFilter('all')}
-            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colours ${
+            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === 'all' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -622,7 +648,7 @@ export default function DashboardStateWrapper({
           <button
             type="button"
             onClick={() => setCustomerFilter('CBTL')}
-            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colours ${
+            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === 'CBTL' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -631,7 +657,7 @@ export default function DashboardStateWrapper({
           <button
             type="button"
             onClick={() => setCustomerFilter("Nando's")}
-            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colours ${
+            className={`px-2 py-0.5 rounded text-sm font-semibold transition-colors ${
               customerFilter === "Nando's" ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -670,7 +696,7 @@ export default function DashboardStateWrapper({
               key={m}
               type="button"
               onClick={() => setActiveMonth(m)}
-              className={`w-7 h-7 text-xs border rounded transition-colours ${
+              className={`w-7 h-7 text-xs border rounded transition-colors ${
                 activeMonth === m
                   ? 'bg-red-700 text-white border-red-700 shadow-sm'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
@@ -692,14 +718,14 @@ export default function DashboardStateWrapper({
           <button
             type="button"
             onClick={handleRefresh}
-            className="bg-white border border-gray-300 text-gray-700 px-2 py-0.5 rounded text-sm hover:bg-gray-50 transition-colours"
+            className="bg-white border border-gray-300 text-gray-700 px-2 py-0.5 rounded text-sm hover:bg-gray-50 transition-colors"
           >
             Refresh
           </button>
           <button
             type="button"
             onClick={handleExportExcel}
-            className="bg-blue-600 text-white px-2 py-0.5 rounded text-sm hover:bg-blue-700 transition-colours shadow-sm"
+            className="bg-blue-600 text-white px-2 py-0.5 rounded text-sm hover:bg-blue-700 transition-colors shadow-sm"
           >
             ↓ Export Excel
           </button>
@@ -740,7 +766,7 @@ export default function DashboardStateWrapper({
                   return (
                     <tr
                       key={item.branch_name}
-                      className={`transition-colours ${
+                      className={`transition-colors ${
                         idx % 2 === 0 ? 'bg-white hover:bg-emerald-50' : 'bg-gray-50 hover:bg-emerald-50'
                       }`}
                     >

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
@@ -99,7 +99,7 @@ function extractSrv(no: string | null | undefined): string | null {
   return null
 }
 
-// 解析schedule_month_ref 取出 {year,monthNum}
+// 解析schedule_month_ref 取出 {y:number,m:number}
 function parseScheduleRef(refStr: string | null): {y:number,m:number} | null {
   if (!refStr) return null
   const iso = refStr.match(/^(\d{4})-(\d{1,2})$/)
@@ -113,6 +113,31 @@ function parseScheduleRef(refStr: string | null): {y:number,m:number} | null {
 
 export default function DataValidationChecker() {
   const router = useRouter()
+  // 权限鉴权状态
+  const [authChecking, setAuthChecking] = useState(true)
+
+  useEffect(() => {
+    const checkPermission = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.replace('/login')
+        return
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      // 仅 account 角色允许进入
+      if (profile?.role !== 'account') {
+        router.replace('/dashboard')
+        return
+      }
+      setAuthChecking(false)
+    }
+    checkPermission()
+  },[router])
+
   const [year, setYear] = useState(2026)
   const [monthNum, setMonthNum] = useState(1)
 
@@ -200,6 +225,11 @@ export default function DataValidationChecker() {
     }finally{
       setLoading(false)
     }
+  }
+
+  // 鉴权中渲染loading
+  if(authChecking){
+    return <div className="min-h-screen flex items-center justify-center text-slate-500">Checking access...</div>
   }
 
   return (
