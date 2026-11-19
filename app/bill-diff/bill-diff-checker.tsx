@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import Papa from 'papaparse'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,65 +49,6 @@ type DiffItem = {
   diffMap: Record<string, { oldVal: string; newVal: string }>
 }
 
-// ✅ 修复标准CSV解析（支持 "" 转义引号）
-function parseCSV(text: string): Record<string, string>[] {
-  const lines: string[] = []
-  let currentLine = ''
-  let insideQuote = false
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]
-    const next = text[i+1]
-    if (c === '"') {
-      if (insideQuote && next === '"') {
-        currentLine += '"'
-        i++
-      } else {
-        insideQuote = !insideQuote
-      }
-    } else if ((c === '\n' || c === '\r') && !insideQuote) {
-      if (c === '\r' && next === '\n') i++
-      lines.push(currentLine)
-      currentLine = ''
-    } else {
-      currentLine += c
-    }
-  }
-  if (currentLine) lines.push(currentLine)
-
-  const validLines = lines.filter(line => line.trim() !== '')
-  if (validLines.length === 0) return []
-
-  const headers = splitCsvLine(validLines[0])
-  const result: Record<string, string>[] = []
-  for (let i = 1; i < validLines.length; i++) {
-    const values = splitCsvLine(validLines[i])
-    const row: Record<string, string> = {}
-    headers.forEach((h, idx) => {
-      row[h.trim()] = values[idx] ?? ''
-    })
-    result.push(row)
-  }
-  return result
-}
-
-function splitCsvLine(line: string): string[] {
-  const res: string[] = []
-  let current = ''
-  let insideQuote = false
-  for (const char of line) {
-    if (char === '"') {
-      insideQuote = !insideQuote
-    } else if (char === ',' && !insideQuote) {
-      res.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  res.push(current)
-  return res
-}
-
 export default function BillDiffChecker() {
   const [dbBills, setDbBills] = useState<BillRow[]>([])
   const [csvBills, setCsvBills] = useState<BillRow[]>([])
@@ -141,8 +83,8 @@ export default function BillDiffChecker() {
       }
       setDbBills(allData)
       console.log('✅ DB Bills loaded ALL, total:', allData.length)
-    } catch (err: any) {
-      alert('Load DB error: ' + err.message)
+    } catch (err: unknown) {
+      alert('Load DB error: ' + (err as Error).message)
     } finally {
       setLoading(false)
     }
@@ -155,29 +97,39 @@ export default function BillDiffChecker() {
     reader.onload = evt => {
       try {
         const text = evt.target?.result as string
-        const records = parseCSV(text)
-        if (records.length === 0) {
-          alert('CSV 里面没有数据，请检查文件！')
-          return
-        }
-        const parsed: BillRow[] = records.map(r => ({
-          area_code: r.area_code ?? null,
-          month: r.month ?? null,
-          doc_no: r.doc_no ?? null,
-          bill_date: r.bill_date ?? null,
-          company_name: r.company_name ?? null,
-          description: r.description ?? null,
-          agent: r.agent ?? null,
-          area: r.area ?? null,
-          project: r.project ?? null,
-          total: r.total ?? null,
-          branch_name: r.branch_name ?? null,
-          schedule_month_ref: r.schedule_month_ref ?? null,
-          service_type: r.service_type ?? null
-        }))
-        setCsvBills(parsed)
-        console.log('CSV loaded total:', parsed.length)
-      } catch (err) {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          delimiter: ",",
+          complete: (results) => {
+            const records = results.data as Record<string, string>[]
+            if (records.length === 0) {
+              alert('CSV 里面没有数据，请检查文件！')
+              return
+            }
+            const parsed: BillRow[] = records.map(r => ({
+              area_code: r.area_code ?? null,
+              month: r.month ?? null,
+              doc_no: r.doc_no ?? null,
+              bill_date: r.bill_date ?? null,
+              company_name: r.company_name ?? null,
+              description: r.description ?? null,
+              agent: r.agent ?? null,
+              area: r.area ?? null,
+              project: r.project ?? null,
+              total: r.total ?? null,
+              branch_name: r.branch_name ?? null,
+              schedule_month_ref: r.schedule_month_ref ?? null,
+              service_type: r.service_type ?? null
+            }))
+            setCsvBills(parsed)
+            console.log('CSV loaded total:', parsed.length)
+          },
+          error: (err: unknown) => {
+            alert('CSV解析失败：' + (err as Error).message)
+          }
+        })
+      } catch (err: unknown) {
         alert('CSV解析失败，文件格式不对！')
       }
     }
@@ -261,7 +213,6 @@ export default function BillDiffChecker() {
         lines.push([item.doc_no, item.status, '-', `"${item.old?.doc_no ?? ''}"`, `"${item.new?.doc_no ?? ''}"`].join(','))
       }
     })
-    // ✅ Windows Excel兼容 \r\n
     const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
