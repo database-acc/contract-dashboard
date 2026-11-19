@@ -78,7 +78,6 @@ export default function CustomerExcelTableFull({ groupedRows }: Props) {
     monthList.forEach((m, mi) => {
       let sumKPS = 0, sumKPM = 0, sumGWM = 0, sumGTC = 0, sumMid = 0, sumOut = 0, sumSub = 0
       groupedRows.forEach(r => {
-        // 跳过分隔行，分隔行monthData是空对象，不会参与求和
         if (r.isDivider) return
         const md = r.monthData[monthList[mi].key]
         sumKPS += md?.kps ?? 0
@@ -91,23 +90,23 @@ export default function CustomerExcelTableFull({ groupedRows }: Props) {
       })
       grandTotalSum += sumSub
       totalCells.push(
-        <td key={`t-${m.key}-kps`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumKPS > 0 ? formatNum(sumKPS) : ''}</td>,
-        <td key={`t-${m.key}-kpm`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumKPM > 0 ? formatNum(sumKPM) : ''}</td>,
-        <td key={`${m.key}-gwm`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumGWM > 0 ? formatNum(sumGWM) : ''}</td>,
-        <td key={`t-${m.key}-gtc`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumGTC > 0 ? formatNum(sumGTC) : ''}</td>,
-        <td key={`t-${m.key}-mid`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumMid > 0 ? formatNum(sumMid) : ''}</td>,
-        <td key={`t-${m.key}-out`} className="border border-sky-200 p-2 text-right bg-sky-100 font-bold">{sumOut > 0 ? formatNum(sumOut) : ''}</td>,
-        <td key={`t-${m.key}-sub`} className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold">{sumSub > 0 ? formatNum(sumSub) : ''}</td>,
+        <td key={`t-${m.key}-kps`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumKPS > 0 ? formatNum(sumKPS) : ''}</td>,
+        <td key={`t-${m.key}-kpm`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumKPM > 0 ? formatNum(sumKPM) : ''}</td>,
+        <td key={`${m.key}-gwm`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumGWM > 0 ? formatNum(sumGWM) : ''}</td>,
+        <td key={`t-${m.key}-gtc`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumGTC > 0 ? formatNum(sumGTC) : ''}</td>,
+        <td key={`t-${m.key}-mid`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumMid > 0 ? formatNum(sumMid) : ''}</td>,
+        <td key={`t-${m.key}-out`} className="border border-sky-200 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumOut > 0 ? formatNum(sumOut) : ''}</td>,
+        <td key={`t-${m.key}-sub`} className="border border-sky-300 border-t-2 border-b-2 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>{sumSub > 0 ? formatNum(sumSub) : ''}</td>,
       )
     })
     totalCells.push(
-      <td key="grand-ov" className="border border-sky-300 border-t-2 border-b-2 p-2 text-right bg-sky-200 font-bold">
+      <td key="grand-ov" className="border border-sky-300 border-t-2 border-b-2 p-2 text-right font-bold" style={{backgroundColor:'#bae6fd'}}>
         {grandTotalSum > 0 ? formatNum(grandTotalSum) : ''}
       </td>
     )
     rows.push(
-      <tr key="total-row" className="bg-sky-200 font-bold">
-        <td className="border border-sky-300 border-t-2 border-b-2 p-2" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#bae6fd' }}>TOTAL</td>
+      <tr key="total-row" style={{backgroundColor:'#bae6fd'}} className="font-bold">
+        <td className="border border-sky-300 border-t-2 border-b-2 p-2" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#bae6fd' }}>OVERALL TOTAL</td>
         <td className="border border-sky-300 border-t-2 border-b-2 p-2 whitespace-nowrap" style={{ position: 'sticky', left: 54, zIndex: 12, background: '#bae6fd' }}></td>
         {...totalCells}
       </tr>
