@@ -1,7 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import FullScreenLoading from '../components/FullScreenLoading'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,23 +25,10 @@ type DayItem = {
   count: number
 }
 
-// 工具函数：把任意日期字符串硬转成本地 YYYY-MM-DD
-function toLocalYmd(dateStr: string | null | undefined): string {
-  if (!dateStr) return ''
-
-  // 如果已经是 YYYY-MM-DD，直接返回
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr
-  }
-
-  // 否则按本地时间解析，避免 UTC 漂移
-  const d = new Date(dateStr)
-  if (isNaN(d.getTime())) return ''
-
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+// 【重点修复】直接截取前10位 YYYY-MM-DD，完全绕过JS时区转换
+function extractYmd(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw.slice(0, 10)
 }
 
 export default function StaffSchedulePage() {
@@ -69,11 +55,7 @@ export default function StaffSchedulePage() {
     const map = new Map<string, DayItem>()
 
     assignList.forEach((row) => {
-      const dateKey = toLocalYmd(row.schedule_date)
-      // ✅ Debug log 打印原始值 + 转换后的key
-      console.log('🔍 Raw schedule_date:', row.schedule_date)
-      console.log('🔑 Converted dateKey:', dateKey)
-
+      const dateKey = extractYmd(row.schedule_date)
       if (!dateKey) return
 
       if (!map.has(dateKey)) {
@@ -84,7 +66,6 @@ export default function StaffSchedulePage() {
       item.list.push({ branch_name: row.branch_name, plan: row.plan })
       item.count += 1
     })
-    console.log('📋 Final dayMap keys:', Array.from(map.keys()))
     return map
   }, [assignList])
 
@@ -101,16 +82,13 @@ export default function StaffSchedulePage() {
       isOtherMonth: boolean
     }> = []
 
-    // 上月尾部填充
+    // 前面空白（上月尾巴）
     for (let i = startWeekDay - 1; i >= 0; i--) {
-      const d = new Date(currentYear, currentMonth, 1)
-      d.setDate(d.getDate() - (i + 1))
-
+      const d = new Date(currentYear, currentMonth, 1 - (i + 1))
       const y = d.getFullYear()
       const m = String(d.getMonth() + 1).padStart(2, '0')
       const day = String(d.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
-
       days.push({
         dayNum: d.getDate(),
         dateObj: d,
@@ -120,15 +98,13 @@ export default function StaffSchedulePage() {
       })
     }
 
-    // 当月日期
+    // 当月天数
     for (let d = 1; d <= last.getDate(); d++) {
       const dateObj = new Date(currentYear, currentMonth, d)
-
       const y = dateObj.getFullYear()
       const m = String(dateObj.getMonth() + 1).padStart(2, '0')
-      const day = String(dateObj.getDate()).padStart(2, '0')
+      const day = String(d).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
-
       days.push({
         dayNum: d,
         dateObj,
@@ -138,29 +114,28 @@ export default function StaffSchedulePage() {
       })
     }
 
-    // 下月头部填充，补齐到 42 格
-    const fillTotal = 42
-    while (days.length < fillTotal) {
-      const nextD = new Date(currentYear, currentMonth + 1, days.length - startWeekDay + 1)
-
-      const y = nextD.getFullYear()
-      const m = String(nextD.getMonth() + 1).padStart(2, '0')
-      const day = String(nextD.getDate()).padStart(2, '0')
+    // 后面补齐到42格（下月开头）
+    let idx = 0
+    while (days.length < 42) {
+      const d = new Date(currentYear, currentMonth + 1, idx + 1)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
-
       days.push({
-        dayNum: nextD.getDate(),
-        dateObj: nextD,
+        dayNum: d.getDate(),
+        dateObj: d,
         dateStr: ds,
         dayInfo: dayMap.get(ds),
         isOtherMonth: true,
       })
+      idx++
     }
 
     return days
   }, [currentYear, currentMonth, dayMap])
 
-  const selectedDayItems = useMemo(() => {
+  const selectedDayData = useMemo(() => {
     if (!selectedDate) return null
     return dayMap.get(selectedDate) ?? null
   }, [selectedDate, dayMap])
@@ -188,11 +163,15 @@ export default function StaffSchedulePage() {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
   if (loading) {
-    return <FullScreenLoading text="Loading schedule…" />
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-3 w-full mx-auto max-w-md">
+    <div className="min-h-screen bg-gray-50 p-3 w-full max-w-md mx-auto">
       <h1 className="text-xl font-bold text-center mb-4">Staff Work Schedule</h1>
 
       <div className="flex items-center justify-between mb-3">
@@ -201,7 +180,7 @@ export default function StaffSchedulePage() {
         <button onClick={goNext} className="px-3 py-1 bg-gray-200 rounded text-sm">Next ▶</button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-2 text-xs text-center font-medium text-gray-500">
+      <div className="grid grid-cols-7 gap-1 mb-2 text-xs text-center font-medium">
         <div>Su</div>
         <div>Mo</div>
         <div>Tu</div>
@@ -214,8 +193,7 @@ export default function StaffSchedulePage() {
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day, idx) => {
           const isSelected = selectedDate === day.dateStr
-          const jobCount = day.dayInfo?.count ?? 0
-
+          const hasJob = !!day.dayInfo && day.dayInfo.count > 0
           return (
             <div
               key={idx}
@@ -225,16 +203,15 @@ export default function StaffSchedulePage() {
                 }
               }}
               className={`
-                relative border rounded overflow-hidden cursor-pointer aspect-square flex items-center justify-center
+                relative border rounded overflow-hidden cursor-pointer aspect-square flex items-center justify-center text-sm
                 ${day.isOtherMonth ? 'bg-gray-100 text-gray-400' : 'bg-white hover:bg-sky-50'}
                 ${isSelected ? 'bg-sky-100 border-sky-400' : ''}
               `}
             >
-              <span className="text-sm">{day.dayNum}</span>
-
-              {jobCount > 0 && !day.isOtherMonth && (
+              {day.dayNum}
+              {hasJob && !day.isOtherMonth && (
                 <span className="absolute bottom-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-[10px] font-bold text-white bg-orange-500 rounded-full z-50">
-                  {jobCount}
+                  {day.dayInfo?.count}
                 </span>
               )}
             </div>
@@ -243,22 +220,17 @@ export default function StaffSchedulePage() {
       </div>
 
       <div className="mt-5">
-        {selectedDayItems ? (
+        {selectedDayData ? (
           <div className="bg-white border rounded p-3 shadow-sm">
-            <h2 className="font-semibold mb-2">📅 {selectedDayItems.dateStr}</h2>
-
-            {selectedDayItems.list.length === 0 ? (
-              <p className="text-gray-400">No jobs for this day</p>
-            ) : (
-              <div className="space-y-2">
-                {selectedDayItems.list.map((item, i) => (
-                  <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
-                    <div className="font-medium">{item.branch_name}</div>
-                    <div className="text-sm text-gray-600">Job: {item.plan}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <h2 className="font-semibold mb-2">📅 {selectedDayData.dateStr}</h2>
+            <div className="space-y-2">
+              {selectedDayData.list.map((item, i) => (
+                <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
+                  <div className="font-medium">{item.branch_name}</div>
+                  <div className="text-sm text-gray-600">{item.plan}</div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="text-center text-gray-400 py-4">Tap date (orange badge) to view jobs</div>
