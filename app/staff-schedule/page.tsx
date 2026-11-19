@@ -25,16 +25,10 @@ type DayItem = {
   count: number
 }
 
-// ✅ 修复时区：UTC+8 马来西亚，解决日期偏移一天
+// ✅ 直接截取前10位 YYYY-MM-DD，绕过JS时区BUG
 function extractYmd(raw: string | null | undefined): string {
   if (!raw) return ''
-  const d = new Date(raw)
-  // +8小时 转到马来西亚时区
-  const myDate = new Date(d.getTime() + 8 * 60 * 60 * 1000)
-  const y = myDate.getUTCFullYear()
-  const m = String(myDate.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(myDate.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return raw.slice(0, 10)
 }
 
 export default function StaffSchedulePage() {
@@ -234,7 +228,7 @@ export default function StaffSchedulePage() {
               {selectedDayData.list.map((item, i) => (
                 <div key={i} className="border-l-4 border-sky-400 pl-3 py-1">
                   <div className="font-medium">{item.branch_name}</div>
-                  <div className="text-sm text-gray-600">{item.plan}</div>
+                  <div className="text-sm text-gray-600">Job: {item.plan}</div>
                 </div>
               ))}
             </div>
