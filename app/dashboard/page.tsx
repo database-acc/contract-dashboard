@@ -202,7 +202,7 @@ async function DashboardContent() {
 export default function Dashboard() {
   return (
     <main className="p-3 md:p-4 lg:p-5 max-w-full">
-      <Suspense fallback={<FullScreenLoading />}>
+      <Suspense fallback={<FullScreenLoading text="Loading dashboard..." />}>
         <DashboardContent />
       </Suspense>
     </main>
