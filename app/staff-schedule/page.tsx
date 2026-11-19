@@ -70,6 +70,10 @@ export default function StaffSchedulePage() {
 
     assignList.forEach((row) => {
       const dateKey = toLocalYmd(row.schedule_date)
+      // ✅ Debug log 打印原始值 + 转换后的key
+      console.log('🔍 Raw schedule_date:', row.schedule_date)
+      console.log('🔑 Converted dateKey:', dateKey)
+
       if (!dateKey) return
 
       if (!map.has(dateKey)) {
@@ -80,7 +84,7 @@ export default function StaffSchedulePage() {
       item.list.push({ branch_name: row.branch_name, plan: row.plan })
       item.count += 1
     })
-
+    console.log('📋 Final dayMap keys:', Array.from(map.keys()))
     return map
   }, [assignList])
 
