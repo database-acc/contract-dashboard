@@ -25,10 +25,20 @@ type DayItem = {
   count: number
 }
 
-// ✅ 直接截取前10位 YYYY-MM-DD，绕过JS时区BUG
 function extractYmd(raw: string | null | undefined): string {
   if (!raw) return ''
-  return raw.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw
+  }
+  if (raw.length >= 10 && raw[4] === '-' && raw[7] === '-') {
+    return raw.slice(0, 10)
+  }
+  const d = new Date(raw)
+  if (isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export default function StaffSchedulePage() {
@@ -53,15 +63,12 @@ export default function StaffSchedulePage() {
 
   const dayMap = useMemo(() => {
     const map = new Map<string, DayItem>()
-
     assignList.forEach((row) => {
       const dateKey = extractYmd(row.schedule_date)
       if (!dateKey) return
-
       if (!map.has(dateKey)) {
         map.set(dateKey, { dateStr: dateKey, list: [], count: 0 })
       }
-
       const item = map.get(dateKey)!
       item.list.push({ branch_name: row.branch_name, plan: row.plan })
       item.count += 1
@@ -73,7 +80,6 @@ export default function StaffSchedulePage() {
     const first = new Date(currentYear, currentMonth, 1)
     const last = new Date(currentYear, currentMonth + 1, 0)
     const startWeekDay = first.getDay()
-
     const days: Array<{
       dayNum: number
       dateObj: Date
@@ -82,9 +88,9 @@ export default function StaffSchedulePage() {
       isOtherMonth: boolean
     }> = []
 
-    // 前面空白（上月尾巴）
     for (let i = startWeekDay - 1; i >= 0; i--) {
-      const d = new Date(currentYear, currentMonth, 1 - (i + 1))
+      const d = new Date(first)
+      d.setDate(first.getDate() - (i + 1))
       const y = d.getFullYear()
       const m = String(d.getMonth() + 1).padStart(2, '0')
       const day = String(d.getDate()).padStart(2, '0')
@@ -98,7 +104,6 @@ export default function StaffSchedulePage() {
       })
     }
 
-    // 当月天数
     for (let d = 1; d <= last.getDate(); d++) {
       const dateObj = new Date(currentYear, currentMonth, d)
       const y = dateObj.getFullYear()
@@ -114,24 +119,20 @@ export default function StaffSchedulePage() {
       })
     }
 
-    // 后面补齐到42格（下月开头）
-    let idx = 0
     while (days.length < 42) {
-      const d = new Date(currentYear, currentMonth + 1, idx + 1)
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
+      const nextD = new Date(currentYear, currentMonth + 1, days.length - startWeekDay + 1)
+      const y = nextD.getFullYear()
+      const m = String(nextD.getMonth() + 1).padStart(2, '0')
+      const day = String(nextD.getDate()).padStart(2, '0')
       const ds = `${y}-${m}-${day}`
       days.push({
-        dayNum: d.getDate(),
-        dateObj: d,
+        dayNum: nextD.getDate(),
+        dateObj: nextD,
         dateStr: ds,
         dayInfo: dayMap.get(ds),
         isOtherMonth: true,
       })
-      idx++
     }
-
     return days
   }, [currentYear, currentMonth, dayMap])
 
@@ -172,7 +173,6 @@ export default function StaffSchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 w-full max-w-md mx-auto">
-      {/* ✅ 修改标题 */}
       <h1 className="text-xl font-bold text-center mb-4">Technician Work Schedule</h1>
 
       <div className="flex items-center justify-between mb-3">
@@ -237,6 +237,11 @@ export default function StaffSchedulePage() {
           <div className="text-center text-gray-400 py-4">Tap date (orange badge) to view jobs</div>
         )}
       </div>
+
+      {/* ✅ 调试打印！重点在这里 */}
+      <pre className="text-xs mt-6 text-red-500 whitespace-pre-wrap border p-2">
+        {JSON.stringify(assignList.map(r => ({ raw: r.schedule_date, extracted: extractYmd(r.schedule_date) })), null, 2)}
+      </pre>
     </div>
   )
 }
