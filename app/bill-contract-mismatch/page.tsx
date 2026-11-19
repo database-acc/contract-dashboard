@@ -205,7 +205,7 @@ const REASON_META: Record<ReasonCode, { label: string; cls: string }> = {
 
 export default function BillContractMismatchPage() {
   const router = useRouter()
-  // -------- 新增：角色鉴权状态 --------
+  // ============ 恢复鉴权状态 ============
   const [authChecking, setAuthChecking] = useState(true)
 
   useEffect(() => {
@@ -297,6 +297,7 @@ export default function BillContractMismatchPage() {
     }
   }, [])
 
+  // ========== 只有鉴权完成之后，才拉取数据 ==========
   useEffect(() => {
     if (!authChecking) {
       loadData()
@@ -528,7 +529,7 @@ export default function BillContractMismatchPage() {
   /* ================================================================== */
   /* Render                                                             */
   /* ================================================================== */
-  // 鉴权加载中
+  // ============ 鉴权加载中UI ============
   if (authChecking) {
     return <div className="min-h-screen flex items-center justify-center text-slate-500">Checking access...</div>
   }
