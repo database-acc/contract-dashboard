@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/utils/supabase/client'
+import FullScreenLoading from '../components/FullScreenLoading'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -53,7 +54,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
+      {/* 登录Loading遮罩 */}
+      <FullScreenLoading text="Logging in..." show={loading} />
+
       {/* 左侧图片区域：按参考图比例放大到约 2/3 */}
       <div
         className="hidden lg:block lg:w-2/3 bg-cover bg-center relative"
