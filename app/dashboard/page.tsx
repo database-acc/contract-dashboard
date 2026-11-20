@@ -126,6 +126,26 @@ async function DashboardContent() {
   // 读取真实角色，限定为三枚举，异常兜底为 staff
   const currentEditorRole = (profile.role ?? 'staff') as 'owner' | 'account' | 'staff'
 
+  // ========== 新增：读取 Last Data Sync ==========
+  const { data: syncMeta } = await supabase
+    .from('system_meta')
+    .select('updated_at')
+    .eq('key', 'last_data_sync')
+    .single()
+
+  const displayTime = syncMeta?.updated_at
+    ? new Date(syncMeta.updated_at).toLocaleString('en-MY', {
+        timeZone: 'Asia/Kuala_Lumpur',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    : '-'
+  // ===========================================
+
   let contractBranchList: ContractBranchRow[] = []
   const { data, error } = await supabase
     .from('contract_branch')
@@ -184,14 +204,20 @@ async function DashboardContent() {
         currentEditorName={userName}
         currentEditorRole={currentEditorRole}
       >
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors shadow-sm"
-          >
-            Sign Out
-          </button>
-        </form>
+        {/* 这里把时间放 Sign Out 同一行，靠右排版 */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="text-xs text-gray-500">
+            📦 Last Data Sync: {displayTime} MYT
+          </div>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors shadow-sm"
+            >
+              Sign Out
+            </button>
+          </form>
+        </div>
       </DashboardStateWrapper>
     </>
   )
