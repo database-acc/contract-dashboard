@@ -21,7 +21,7 @@ export default async function Page({
           ← Back to Dashboard
         </a>
       </div>
-      <Suspense fallback={<FullScreenLoading />}>
+      <Suspense fallback={<FullScreenLoading text="Loading Annual Table..." />}>
         <AnnualTableDataLoader searchParams={searchParams} />
       </Suspense>
     </main>
