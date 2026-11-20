@@ -12,7 +12,7 @@ export default async function Page({
   searchParams: SearchParams
 }) {
   return (
-    <main className="p-4">
+    <main className="p-4 bg-white min-h-screen">
       <div className="mb-4">
         <a
           href="/dashboard"
