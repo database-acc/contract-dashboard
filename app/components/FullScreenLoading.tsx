@@ -12,10 +12,10 @@ export default function FullScreenLoading({
   if (!show) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/70 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-4 rounded-2xl bg-white px-8 py-6 shadow-lg">
-        <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-green-700 animate-spin"></div>
-        <p className="text-sm text-gray-600 font-medium">{text}</p>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/60 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-white px-10 py-8 shadow-xl">
+        <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-emerald-600 animate-spin"></div>
+        <p className="text-base text-slate-700 font-medium">{text}</p>
       </div>
     </div>
   )
