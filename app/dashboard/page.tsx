@@ -66,6 +66,39 @@ async function updateBillServiceType(billId: bigint, serviceType: string | null)
     .eq('id', billId)
 }
 
+// ✅ 新增：更新 Last Data Refresh，仅 account 角色可修改
+async function updateLastDataSync(newValue: string, userRole: string, userId: string, userName: string) {
+  'use server'
+  if (userRole !== 'account') {
+    throw new Error('Only Account role can update this time')
+  }
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll: () => {},
+      },
+    }
+  )
+  await supabase
+    .from('system_meta')
+    .upsert(
+      {
+        key: 'last_data_sync',
+        value: newValue,
+        updated_by: userId,
+        updated_name: userName,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'key' }
+    )
+}
+
 // Server Action 登出
 async function signOut() {
   'use server'
@@ -111,7 +144,7 @@ async function DashboardContent() {
   if (!user) {
     redirect('/login')
   }
-  // ✅ 这里拿到 userName
+  const userId = user.id
   const userName = user.user_metadata?.name ?? user.email ?? 'Unknown User'
 
   const { data: profile, error: profileErr } = await supabase
@@ -125,25 +158,16 @@ async function DashboardContent() {
 
   // 读取真实角色，限定为三枚举，异常兜底为 staff
   const currentEditorRole = (profile.role ?? 'staff') as 'owner' | 'account' | 'staff'
+  const canEditSyncTime = currentEditorRole === 'account'
 
-  // ========== 读取 Last Data Sync ==========
+  // ========== 读取 Last Data Sync（从 value 字段拿手动输入的文本） ==========
   const { data: syncMeta } = await supabase
     .from('system_meta')
-    .select('updated_at')
+    .select('value')
     .eq('key', 'last_data_sync')
     .single()
 
-  const displayTime = syncMeta?.updated_at
-    ? new Date(syncMeta.updated_at).toLocaleString('en-MY', {
-        timeZone: 'Asia/Kuala_Lumpur',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      })
-    : '-'
+  const displayTime = syncMeta?.value ?? '-'
   // ===========================================
 
   let contractBranchList: ContractBranchRow[] = []
@@ -203,6 +227,10 @@ async function DashboardContent() {
         updateBillServiceType={updateBillServiceType}
         currentEditorName={userName}
         currentEditorRole={currentEditorRole}
+        currentUserId={userId}
+        updateLastDataSync={updateLastDataSync}
+        canEditSyncTime={canEditSyncTime}
+        syncTimeValue={displayTime}
       >
         <form action={signOut}>
           <button
@@ -212,10 +240,6 @@ async function DashboardContent() {
             Sign Out
           </button>
         </form>
-        {/* 固定在容器右下角（红圈位置） */}
-        <div className="fixed bottom-4 right-4 text-xs text-gray-500 bg-white/90 px-2 py-1 rounded shadow">
-          📦 Last Data Sync: {displayTime} MYT
-        </div>
       </DashboardStateWrapper>
     </>
   )

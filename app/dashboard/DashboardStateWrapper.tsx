@@ -59,6 +59,10 @@ type Props = {
   updateBillServiceType: (billId: bigint, serviceType: string | null) => Promise<void>
   currentEditorName: string
   currentEditorRole: 'owner' | 'account' | 'staff'
+  currentUserId: string
+  updateLastDataSync: (newValue: string, userRole: string, userId: string, userName: string) => Promise<void>
+  canEditSyncTime: boolean
+  syncTimeValue: string
   children?: ReactNode
 }
 
@@ -216,6 +220,10 @@ export default function DashboardStateWrapper({
   updateBillServiceType,
   currentEditorName,
   currentEditorRole,
+  currentUserId,
+  updateLastDataSync,
+  canEditSyncTime,
+  syncTimeValue,
   children
 }: Props) {
   const [year, setYear] = useState(2026)
@@ -227,6 +235,10 @@ export default function DashboardStateWrapper({
   const [sideOpen, setSideOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
+
+  // Last Data Refresh state
+  const [syncText, setSyncText] = useState(syncTimeValue)
+  const [savingSync, setSavingSync] = useState(false)
 
   // ========== Schedule Assign 状态 ==========
   const [scheduleAssignList, setScheduleAssignList] = useState<BillScheduleAssignRow[]>([])
@@ -334,6 +346,18 @@ export default function DashboardStateWrapper({
     document.addEventListener("mousedown", handleMouseDownOutside)
     return () => document.removeEventListener("mousedown", handleMouseDownOutside)
   }, [editingKey])
+
+  // Save Last Data Refresh
+  const handleSaveSyncTime = async () => {
+    setSavingSync(true)
+    try {
+      await updateLastDataSync(syncText, currentEditorRole, currentUserId, currentEditorName)
+    } catch (err) {
+      alert('Only Account role can update this time!')
+    } finally {
+      setSavingSync(false)
+    }
+  }
 
   const handleRefresh = () => {
     window.location.reload()
@@ -1084,6 +1108,7 @@ export default function DashboardStateWrapper({
                               </span>
                             )
                           ) : someDone ? (
+                  
                             <span className="relative text-orange-600 font-semibold cursor-help group text-xs">
                               ⏳ Partial Done
                               <span className={`${tooltipClass} bg-gray-800 text-white px-2 py-1 rounded text-xs whitespace-nowrap z-50`}>
