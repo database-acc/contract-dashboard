@@ -693,7 +693,15 @@ export default function DashboardStateWrapper({
 
   return (
     <div className="w-full relative">
-      <FullScreenLoading show={isLoading} text="Loading..." />
+      {isLoading && (
+  <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
+    <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col items-center">
+      <div className="w-12 h-12 border-4 border-gray-200 border-t-green-500 rounded-full animate-spin"></div>
+      <p className="mt-3 text-gray-600">Loading...</p>
+    </div>
+  </div>
+)}
+<FullScreenLoading show={false} text="Loading..." />
       {/* Side Drawer */}
       <div
         className={`fixed left-0 top-0 h-full w-64 bg-white shadow-xl z-50 flex flex-col gap-3 pt-20 transition-transform duration-300 ease-in-out ${
