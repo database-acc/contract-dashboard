@@ -204,11 +204,8 @@ async function DashboardContent() {
         currentEditorName={userName}
         currentEditorRole={currentEditorRole}
       >
-        {/* 这里把时间放 Sign Out 同一行，靠右排版 */}
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="text-xs text-gray-500">
-            📦 Last Data Sync: {displayTime} MYT
-          </div>
+        {/* Sign Out 在左，Last Data Sync 在最右下角 */}
+        <div className="flex items-center justify-end gap-3 mb-3">
           <form action={signOut}>
             <button
               type="submit"
@@ -217,6 +214,9 @@ async function DashboardContent() {
               Sign Out
             </button>
           </form>
+          <div className="text-xs text-gray-500">
+            📦 Last Data Sync: {displayTime} MYT
+          </div>
         </div>
       </DashboardStateWrapper>
     </>
