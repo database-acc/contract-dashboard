@@ -126,7 +126,7 @@ async function DashboardContent() {
   // 读取真实角色，限定为三枚举，异常兜底为 staff
   const currentEditorRole = (profile.role ?? 'staff') as 'owner' | 'account' | 'staff'
 
-  // ========== 新增：读取 Last Data Sync ==========
+  // ========== 读取 Last Data Sync ==========
   const { data: syncMeta } = await supabase
     .from('system_meta')
     .select('updated_at')
@@ -204,19 +204,17 @@ async function DashboardContent() {
         currentEditorName={userName}
         currentEditorRole={currentEditorRole}
       >
-        {/* Sign Out 在左，Last Data Sync 在最右下角 */}
-        <div className="flex items-center justify-end gap-3 mb-3">
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors shadow-sm"
-            >
-              Sign Out
-            </button>
-          </form>
-          <div className="text-xs text-gray-500">
-            📦 Last Data Sync: {displayTime} MYT
-          </div>
+        <form action={signOut}>
+          <button
+            type="submit"
+            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors shadow-sm"
+          >
+            Sign Out
+          </button>
+        </form>
+        {/* 固定在容器右下角（红圈位置） */}
+        <div className="fixed bottom-4 right-4 text-xs text-gray-500 bg-white/90 px-2 py-1 rounded shadow">
+          📦 Last Data Sync: {displayTime} MYT
         </div>
       </DashboardStateWrapper>
     </>
